@@ -1,0 +1,424 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Interactive 3D simulator of the normal modes of a circular drum head.">
+<title>Circular Drum Head Modes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,600;1,6..72,400&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --bg:#f6f2ea; --panel:#fffdf8; --stage:#efe9dd; --fg:#211d18; --muted:#6d655a;
+  --line:#ddd4c4; --line-strong:#c4b8a3; --accent:#b8432a; --accent-fg:#ffffff;
+  --down:#2f4f8f; --chip:#ece5d7; --box:#8a7f6e; --nodal:#111111;
+  --serif:"Newsreader",Georgia,"Times New Roman",serif;
+  --sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#16140f; --panel:#1f1c16; --stage:#12100c; --fg:#ede6d8; --muted:#a39a8a;
+    --line:#342f26; --line-strong:#4a4337; --accent:#e2694c; --accent-fg:#1a0d08;
+    --down:#7f9fe0; --chip:#2a261e; --box:#7a7061; --nodal:#f5efe2; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#16140f; --panel:#1f1c16; --stage:#12100c; --fg:#ede6d8; --muted:#a39a8a;
+  --line:#342f26; --line-strong:#4a4337; --accent:#e2694c; --accent-fg:#1a0d08;
+  --down:#7f9fe0; --chip:#2a261e; --box:#7a7061; --nodal:#f5efe2; color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+img{max-width:100%}
+body{margin:0}
+body{background:var(--bg);color:var(--fg);font-family:var(--sans);font-size:15px;line-height:1.5;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:28px 48px}
+.wrap{max-width:1180px;margin:0 auto;display:flex;flex-direction:column;gap:22px}
+header{display:flex;flex-direction:column;gap:6px}
+.eyebrow{font:500 11px/1 var(--sans);letter-spacing:.14em;text-transform:uppercase;color:var(--accent)}
+h1{font:600 clamp(28px,4.2vw,42px)/1.08 var(--serif);margin:0;text-wrap:balance;letter-spacing:-.01em}
+.lede{margin:0;color:var(--muted);max-width:62ch}
+i.m{font-family:var(--serif);font-style:italic;font-size:1.08em}
+.main{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:18px;align-items:start}
+@media (max-width:880px){.main{grid-template-columns:minmax(0,1fr)}}
+.stage{position:relative;background:var(--stage);border:1px solid var(--line);border-radius:14px;overflow:hidden;
+  aspect-ratio:1/1;max-height:78vh;width:100%;max-width:100%;touch-action:none;cursor:grab}
+.stage.dragging{cursor:grabbing}
+.stage canvas{display:block;width:100%!important;height:100%!important}
+.hud{position:absolute;left:12px;top:12px;display:flex;flex-direction:column;gap:2px;pointer-events:none;
+  font:500 13px/1.3 var(--mono);color:var(--fg)}
+.hud .sub{color:var(--muted);font-weight:400;font-size:12px}
+.tools{position:absolute;right:10px;top:10px;display:flex;gap:6px}
+.hint{position:absolute;left:12px;bottom:10px;font:400 12px var(--sans);color:var(--muted);pointer-events:none}
+@media (max-width:560px){.hint{display:none}}
+.legend{position:absolute;right:12px;bottom:12px;display:flex;align-items:center;gap:6px;font:400 11px var(--mono);color:var(--muted);pointer-events:none}
+.legend .bar{width:90px;height:8px;border-radius:4px;border:1px solid var(--line-strong)}
+.btn{font:500 13px var(--sans);color:var(--fg);background:var(--panel);border:1px solid var(--line-strong);border-radius:8px;
+  padding:6px 11px;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.btn:hover{border-color:var(--fg)}
+.btn.primary{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
+.btn:focus-visible,.seg input:focus-visible+span,input[type=range]:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px;display:flex;flex-direction:column;gap:18px;min-width:0}
+.group{display:flex;flex-direction:column;gap:8px}
+.label{font:600 11px/1 var(--sans);letter-spacing:.1em;text-transform:uppercase;color:var(--muted);display:flex;justify-content:space-between;align-items:baseline}
+.label .val{font:500 13px var(--mono);letter-spacing:0;text-transform:none;color:var(--fg)}
+.seg{display:grid;gap:4px;background:var(--chip);padding:4px;border-radius:10px}
+.seg.n{grid-template-columns:repeat(6,1fr)}.seg.k{grid-template-columns:repeat(4,1fr)}
+.seg label{position:relative}
+.seg input{position:absolute;opacity:0;inset:0;margin:0;cursor:pointer}
+.seg span{display:block;text-align:center;padding:7px 0;border-radius:7px;font:500 14px var(--mono);color:var(--muted);transition:background .12s,color .12s}
+.seg input:checked+span{background:var(--panel);color:var(--fg);box-shadow:0 1px 2px rgba(0,0,0,.12),0 0 0 1px var(--line-strong)}
+.seg label:hover span{color:var(--fg)}
+.check{display:flex;align-items:center;gap:9px;cursor:pointer;font-size:14px}
+.check input{width:16px;height:16px;accent-color:var(--accent);margin:0}
+input[type=range]{width:100%;accent-color:var(--accent);margin:0}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.readout{border-top:1px solid var(--line);padding-top:14px;display:grid;grid-template-columns:1fr 1fr;gap:10px 14px}
+.readout div{display:flex;flex-direction:column;gap:2px;min-width:0}
+.readout dt{font:400 12px var(--sans);color:var(--muted)}
+.readout dd{margin:0;font:500 15px var(--mono)}
+.readout div.formula{display:block;grid-column:1/-1;background:var(--chip);border-radius:8px;padding:10px 12px;font:400 15px/1.45 var(--serif);overflow-x:auto;white-space:nowrap}
+.formula b{font-family:var(--mono);font-weight:500;font-size:13px}
+.about{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:18px}
+@media (max-width:880px){.about{grid-template-columns:minmax(0,1fr)}}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px 20px;min-width:0}
+.card h2{font:600 19px/1.2 var(--serif);margin:0 0 8px}
+.card p{margin:0 0 10px;max-width:68ch}
+.caption{font-family:var(--serif);font-size:17px;line-height:1.55}
+.card ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:6px}
+a{color:var(--accent)}
+.foot{font-size:12px;color:var(--muted)}
+.fallback{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:24px;text-align:center;color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <span class="eyebrow">Interactive simulation · acoustics of membranes</span>
+    <h1>Normal Modes of a Circular Drum Head</h1>
+    <p class="lede">Pick an order <i class="m">n</i> and a zero <i class="m">k</i> to see the drum head’s mode shape in 3D. Drag to rotate, scroll or pinch to zoom, and press Play to watch it vibrate.</p>
+  </header>
+
+  <section class="main">
+    <div class="stage" id="stage" aria-label="3D view of the drum head mode. Drag to rotate.">
+      <div class="hud" aria-live="polite"><span id="hudMode">n = 0, k = 1</span><span class="sub" id="hudSub">j₀,₁ = 2.40483</span></div>
+      <div class="tools"><button class="btn" id="resetView" type="button" title="Reset the camera">Reset view</button></div>
+      <div class="hint">Drag to rotate · scroll / pinch to zoom</div>
+      <div class="legend"><span>−1</span><span class="bar" id="legendBar"></span><span>+1</span></div>
+    </div>
+
+    <aside class="panel" aria-label="Controls">
+      <label class="check"><input type="checkbox" id="mesh"> show mesh</label>
+
+      <div class="group">
+        <div class="label">order <span class="val" id="nVal">n = 0</span></div>
+        <div class="seg n" role="radiogroup" aria-label="order n" id="nGroup"></div>
+      </div>
+
+      <div class="group">
+        <div class="label"><span><span style="text-transform:none">k</span><sup style="text-transform:none">th</sup> zero</span> <span class="val" id="kVal">k = 1</span></div>
+        <div class="seg k" role="radiogroup" aria-label="k-th zero" id="kGroup"></div>
+      </div>
+
+      <div class="group">
+        <div class="label">time <span class="val" id="tVal">0.00</span></div>
+        <input type="range" id="time" min="0" max="6.283185" step="0.01" value="0" aria-label="time">
+        <div class="row">
+          <button class="btn primary" id="play" type="button" aria-pressed="false">▶ Play</button>
+          <button class="btn" id="zeroT" type="button">t = 0</button>
+        </div>
+      </div>
+
+      <div class="group">
+        <label class="check"><input type="checkbox" id="nodal"> show nodal lines</label>
+        <label class="check"><input type="checkbox" id="realSpeed"> play at relative frequency</label>
+      </div>
+
+      <dl class="readout">
+        <div><dt>zero <i class="m">j</i><sub><i class="m">n</i>,<i class="m">k</i></sub></dt><dd id="rZero">2.40483</dd></div>
+        <div><dt><i class="m">ω</i><sub><i class="m">n</i>,<i class="m">k</i></sub> / <i class="m">ω</i><sub>0,1</sub></dt><dd id="rRatio">1.000</dd></div>
+        <div><dt>nodal diameters</dt><dd id="rDiam">0</dd></div>
+        <div><dt>nodal circles</dt><dd id="rCirc">0</dd></div>
+        <div class="formula" id="formula"></div>
+      </dl>
+    </aside>
+  </section>
+
+  <section class="about">
+    <div class="card">
+      <h2>About this Demonstration</h2>
+      <p class="caption">This Demonstration illustrates the normal vibrational modes of a drum head fixed along a circular edge. Each mode with elongation (in polar coordinates) <i class="m">ψ</i>(<i class="m">t</i>; <i class="m">r</i>, <i class="m">φ</i>) ∼ cos(<i class="m">ω</i><sub><i class="m">n</i>,<i class="m">k</i></sub> <i class="m">t</i>) cos(<i class="m">n</i> <i class="m">φ</i>) <i class="m">J</i><sub><i class="m">n</i></sub>(<i class="m">j</i><sub><i class="m">n</i>,<i class="m">k</i></sub> <i class="m">r</i>) is related to Bessel functions of the first kind, <i class="m">J</i><sub><i class="m">n</i></sub>(<i class="m">j</i><sub><i class="m">n</i>,<i class="m">k</i></sub> <i class="m">r</i>), where <i class="m">r</i> is the radial coordinate, <i class="m">φ</i> the polar angle, and <i class="m">t</i> the time. Selecting the order, <i class="m">n</i>, determines the angular periodicity of the drum head. Selecting the <i class="m">k</i><sup>th</sup> zero <i class="m">j</i><sub><i class="m">n</i>,<i class="m">k</i></sub> of <i class="m">J</i><sub><i class="m">n</i></sub>(<i class="m">x</i>) determines the number of antinodes along a radial line connecting the center and outer edge.</p>
+      <p class="foot">The time slider sets the phase <i class="m">ω</i><sub><i class="m">n</i>,<i class="m">k</i></sub><i class="m">t</i> from 0 to 2π, as in the original. With “play at relative frequency” on, each mode oscillates at a rate proportional to <i class="m">j</i><sub><i class="m">n</i>,<i class="m">k</i></sub>, so higher modes visibly vibrate faster.</p>
+    </div>
+    <div class="card">
+      <h2>Source &amp; related links</h2>
+      <ul>
+        <li><a href="https://demonstrations.wolfram.com/NormalModesOfACircularDrumHead/" target="_blank" rel="noopener">Normal Modes of a Circular Drum Head</a> — Wolfram Demonstrations Project (Adam Smith), the original this page reproduces</li>
+        <li><a href="http://mathworld.wolfram.com/BesselFunctionoftheFirstKind.html" target="_blank" rel="noopener">Bessel Function of the First Kind</a> — Wolfram MathWorld</li>
+        <li><a href="http://demonstrations.wolfram.com/VibratingCircularMembrane/" target="_blank" rel="noopener">Vibrating Circular Membrane</a> — Wolfram Demonstrations Project</li>
+      </ul>
+    </div>
+  </section>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(function(){
+  // Zeros j_{n,k} of J_n, n = 0..5, k = 1..4
+  const ZEROS = [
+    [2.4048255576957724, 5.520078110286311, 8.653727912911013, 11.791534439014281],
+    [3.8317059702075125, 7.015586669815619, 10.173468135062722, 13.323691936314223],
+    [5.135622301840683, 8.417244140399866, 11.61984117214906, 14.795951782351262],
+    [6.380161895923984, 9.76102312998167, 13.015200721698434, 16.223466160318768],
+    [7.588342434503804, 11.064709488501185, 14.37253667161759, 17.615966049804832],
+    [8.771483815959954, 12.338604197466944, 15.70017407971167, 18.98013387517992]
+  ];
+  // Bessel J_n(x) = (1/π) ∫_0^π cos(nτ − x sin τ) dτ (trapezoid rule, exponentially convergent)
+  function besselJ(n, x){
+    const M = 96; let s = 0;
+    for (let i = 0; i <= M; i++){
+      const tau = Math.PI * i / M;
+      const w = (i === 0 || i === M) ? 0.5 : 1;
+      s += w * Math.cos(n*tau - x*Math.sin(tau));
+    }
+    return s / M;
+  }
+  const SUBS = '₀₁₂₃₄₅₆₇₈₉';
+  const sub = d => String(d).split('').map(c => SUBS[+c]).join('');
+
+  const state = { mesh:false, n:0, k:1, t:0, playing:false, nodal:false, realSpeed:false };
+
+  // ---------- controls ----------
+  const nGroup = document.getElementById('nGroup'), kGroup = document.getElementById('kGroup');
+  function makeSeg(group, name, vals, cur){
+    vals.forEach(v => {
+      const l = document.createElement('label');
+      l.innerHTML = `<input type="radio" name="${name}" value="${v}" ${v===cur?'checked':''} aria-label="${name} = ${v}"><span>${v}</span>`;
+      group.appendChild(l);
+    });
+    group.addEventListener('change', e => { state[name] = +e.target.value; setMode(); });
+  }
+  makeSeg(nGroup, 'n', [0,1,2,3,4,5], 0);
+  makeSeg(kGroup, 'k', [1,2,3,4], 1);
+  const timeEl = document.getElementById('time'), tVal = document.getElementById('tVal');
+  const playBtn = document.getElementById('play');
+  timeEl.addEventListener('input', () => { state.t = +timeEl.value; if (state.playing) togglePlay(); updateTime(); });
+  document.getElementById('zeroT').addEventListener('click', () => { state.t = 0; updateTime(); });
+  document.getElementById('mesh').addEventListener('change', e => { state.mesh = e.target.checked; if (meshLines) meshLines.visible = state.mesh; dirty = true; });
+  document.getElementById('nodal').addEventListener('change', e => { state.nodal = e.target.checked; if (nodalLines) nodalLines.visible = state.nodal; dirty = true; });
+  document.getElementById('realSpeed').addEventListener('change', e => { state.realSpeed = e.target.checked; });
+  function togglePlay(){
+    state.playing = !state.playing;
+    playBtn.textContent = state.playing ? '❚❚ Pause' : '▶ Play';
+    playBtn.setAttribute('aria-pressed', state.playing);
+    lastTs = null;
+  }
+  playBtn.addEventListener('click', togglePlay);
+
+  // ---------- colormap (displacement −1 … +1) ----------
+  const C_DOWN = [0.18,0.31,0.62], C_MID = [0.93,0.88,0.79], C_UP = [0.80,0.27,0.16];
+  function colorFor(v, out, o){
+    const a = Math.min(1, Math.abs(v)); const e = Math.pow(a, 0.75);
+    const c = v < 0 ? C_DOWN : C_UP;
+    out[o]   = C_MID[0] + (c[0]-C_MID[0])*e;
+    out[o+1] = C_MID[1] + (c[1]-C_MID[1])*e;
+    out[o+2] = C_MID[2] + (c[2]-C_MID[2])*e;
+  }
+  const rgb = c => `rgb(${c.map(x=>Math.round(x*255)).join(',')})`;
+  document.getElementById('legendBar').style.background = `linear-gradient(90deg, ${rgb(C_DOWN)}, ${rgb(C_MID)}, ${rgb(C_UP)})`;
+
+  // ---------- readouts ----------
+  function updateReadouts(){
+    const {n,k} = state, j = ZEROS[n][k-1];
+    document.getElementById('nVal').textContent = `n = ${n}`;
+    document.getElementById('kVal').textContent = `k = ${k}`;
+    document.getElementById('hudMode').textContent = `n = ${n}, k = ${k}`;
+    document.getElementById('hudSub').textContent = `j${sub(n)},${sub(k)} = ${j.toFixed(5)}`;
+    document.getElementById('rZero').textContent = j.toFixed(5);
+    document.getElementById('rRatio').textContent = (j/ZEROS[0][0]).toFixed(3);
+    document.getElementById('rDiam').textContent = n;
+    document.getElementById('rCirc').textContent = k-1;
+    document.getElementById('formula').innerHTML =
+      `<i>z</i> = cos(<b>${state.t.toFixed(2)}</b>) · cos(<b>${n}</b><i>φ</i>) · <i>J</i><sub>${n}</sub>(<b>${j.toFixed(4)}</b> <i>r</i>)`;
+  }
+  function updateTime(){
+    timeEl.value = state.t; tVal.textContent = state.t.toFixed(2);
+    updateReadouts(); updateSurface();
+  }
+
+  // ---------- three.js ----------
+  const stage = document.getElementById('stage');
+  if (typeof THREE === 'undefined'){
+    stage.insertAdjacentHTML('beforeend','<div class="fallback">The 3D library could not load. Check your connection and reload the page.</div>');
+    updateReadouts(); return;
+  }
+  let renderer;
+  try { renderer = new THREE.WebGLRenderer({ antialias:true, alpha:true }); }
+  catch(err){ stage.insertAdjacentHTML('beforeend','<div class="fallback">WebGL is not available in this browser, so the 3D view cannot be drawn.</div>'); updateReadouts(); return; }
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.setClearColor(0x000000, 0);
+  stage.insertBefore(renderer.domElement, stage.firstChild);
+
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(28, 1, 0.1, 100);
+  camera.up.set(0,0,1);
+  scene.add(new THREE.AmbientLight(0xffffff, 0.62));
+  const key = new THREE.DirectionalLight(0xffffff, 0.55); key.position.set(1.5, -1, 3); camera.add(key);
+  const fill = new THREE.DirectionalLight(0xffffff, 0.18); fill.position.set(-2, 1, -1); camera.add(fill);
+  scene.add(camera);
+
+  // Polar grid: s ∈ [0,1], θ ∈ [0,2π]
+  const NR = 48, NT = 120;
+  const nv = (NR+1)*(NT+1);
+  const pos = new Float32Array(nv*3), col = new Float32Array(nv*3);
+  const cosT = new Float32Array(NT+1), sinT = new Float32Array(NT+1);
+  for (let j = 0; j <= NT; j++){ const th = 2*Math.PI*j/NT; cosT[j] = Math.cos(th); sinT[j] = Math.sin(th); }
+  for (let i = 0; i <= NR; i++) for (let j = 0; j <= NT; j++){
+    const s = i/NR, o = (i*(NT+1)+j)*3; pos[o] = s*cosT[j]; pos[o+1] = s*sinT[j]; pos[o+2] = 0;
+  }
+  const idx = [];
+  for (let i = 0; i < NR; i++) for (let j = 0; j < NT; j++){
+    const a = i*(NT+1)+j, b = a+1, c = a+(NT+1), d = c+1;
+    if (i > 0) idx.push(a, c, b);
+    idx.push(b, c, d);
+  }
+  const geo = new THREE.BufferGeometry();
+  const posAttr = new THREE.BufferAttribute(pos, 3); posAttr.setUsage(THREE.DynamicDrawUsage);
+  const colAttr = new THREE.BufferAttribute(col, 3); colAttr.setUsage(THREE.DynamicDrawUsage);
+  geo.setAttribute('position', posAttr); geo.setAttribute('color', colAttr); geo.setIndex(idx);
+  const surfMat = new THREE.MeshPhongMaterial({ vertexColors:true, side:THREE.DoubleSide, shininess:18, specular:0x222222,
+    polygonOffset:true, polygonOffsetFactor:1, polygonOffsetUnits:1 });
+  const surface = new THREE.Mesh(geo, surfMat); scene.add(surface);
+
+  // Mesh lines share the surface's position buffer: 12 circles (constant r) and 24 spokes (constant θ)
+  const midx = [];
+  for (let i = 4; i <= NR; i += 4) for (let j = 0; j < NT; j++){ const a = i*(NT+1)+j; midx.push(a, a+1); }
+  for (let j = 0; j < NT; j += 5) for (let i = 0; i < NR; i++){ const a = i*(NT+1)+j; midx.push(a, a+(NT+1)); }
+  const mgeo = new THREE.BufferGeometry(); mgeo.setAttribute('position', posAttr); mgeo.setIndex(midx);
+  const meshMat = new THREE.LineBasicMaterial({ color:0x2a241c, transparent:true, opacity:0.45 });
+  const meshLines = new THREE.LineSegments(mgeo, meshMat); meshLines.visible = false; scene.add(meshLines);
+
+  // Bounding box [-1,1]^3 (PlotRange → 1, Boxed)
+  const boxMat = new THREE.LineBasicMaterial({ color:0x8a7f6e });
+  const box = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(2,2,2)), boxMat); scene.add(box);
+
+  // Nodal lines (z = 0): n diameters and k−1 interior circles
+  let nodalLines = null;
+  const nodalMat = new THREE.LineBasicMaterial({ color:0x111111 });
+  function buildNodal(){
+    if (nodalLines){ scene.remove(nodalLines); nodalLines.geometry.dispose(); }
+    const {n,k} = state, p = [];
+    for (let m = 0; m < n; m++){
+      const th = (2*m+1)*Math.PI/(2*n);
+      p.push(Math.cos(th), Math.sin(th), 0, -Math.cos(th), -Math.sin(th), 0);
+    }
+    for (let m = 0; m < k-1; m++){
+      const R = ZEROS[n][m]/ZEROS[n][k-1], S = 128;
+      for (let q = 0; q < S; q++){
+        const a = 2*Math.PI*q/S, b = 2*Math.PI*(q+1)/S;
+        p.push(R*Math.cos(a), R*Math.sin(a), 0, R*Math.cos(b), R*Math.sin(b), 0);
+      }
+    }
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(p, 3));
+    nodalLines = new THREE.LineSegments(g, nodalMat); nodalLines.visible = state.nodal; nodalLines.renderOrder = 2; scene.add(nodalLines);
+  }
+
+  // Radial profile J_n(j_{n,k} s) and angular factor cos(nθ)
+  const radial = new Float32Array(NR+1), angular = new Float32Array(NT+1);
+  function setMode(){
+    const {n,k} = state, z = ZEROS[n][k-1];
+    for (let i = 0; i <= NR; i++) radial[i] = besselJ(n, z*i/NR);
+    radial[NR] = 0; // fixed edge
+    for (let j = 0; j <= NT; j++) angular[j] = Math.cos(n*2*Math.PI*j/NT);
+    buildNodal(); updateReadouts(); updateSurface();
+  }
+  function updateSurface(){
+    const ct = Math.cos(state.t);
+    for (let i = 0; i <= NR; i++){
+      const rv = radial[i]*ct;
+      for (let j = 0; j <= NT; j++){
+        const o = (i*(NT+1)+j)*3, z = rv*angular[j];
+        pos[o+2] = z; colorFor(z, col, o);
+      }
+    }
+    posAttr.needsUpdate = true; colAttr.needsUpdate = true;
+    geo.computeVertexNormals();
+    dirty = true;
+  }
+
+  // ---------- theme-aware line colors ----------
+  function applyTheme(){
+    const cs = getComputedStyle(document.documentElement);
+    boxMat.color.set(cs.getPropertyValue('--box').trim() || '#8a7f6e');
+    nodalMat.color.set(cs.getPropertyValue('--nodal').trim() || '#111');
+    dirty = true;
+  }
+  try { window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyTheme); } catch(e){}
+  new MutationObserver(applyTheme).observe(document.documentElement, { attributes:true, attributeFilter:['data-theme'] });
+
+  // ---------- camera (ViewPoint ≈ {1.3, −2.4, 2}) ----------
+  const VIEW0 = { az: Math.atan2(-2.4, 1.3), el: Math.asin(2/Math.hypot(1.3,2.4,2)), zoom: 1 };
+  const view = { ...VIEW0 };
+  function placeCamera(){
+    const d = 7.4 / view.zoom;
+    camera.position.set(d*Math.cos(view.el)*Math.cos(view.az), d*Math.cos(view.el)*Math.sin(view.az), d*Math.sin(view.el));
+    camera.lookAt(0,0,0); dirty = true;
+  }
+  document.getElementById('resetView').addEventListener('click', () => { Object.assign(view, VIEW0); placeCamera(); });
+
+  const pointers = new Map(); let pinch0 = null;
+  const el = renderer.domElement;
+  el.addEventListener('pointerdown', e => {
+    el.setPointerCapture(e.pointerId); pointers.set(e.pointerId, {x:e.clientX, y:e.clientY});
+    stage.classList.add('dragging');
+    if (pointers.size === 2){ const [a,b] = [...pointers.values()]; pinch0 = { d: Math.hypot(a.x-b.x, a.y-b.y), z: view.zoom }; }
+  });
+  el.addEventListener('pointermove', e => {
+    if (!pointers.has(e.pointerId)) return;
+    const p = pointers.get(e.pointerId), dx = e.clientX - p.x, dy = e.clientY - p.y;
+    p.x = e.clientX; p.y = e.clientY;
+    if (pointers.size === 1){
+      view.az -= dx * 0.008;
+      view.el = Math.max(-1.53, Math.min(1.53, view.el + dy * 0.008));
+      placeCamera();
+    } else if (pointers.size === 2 && pinch0){
+      const [a,b] = [...pointers.values()];
+      view.zoom = Math.max(0.5, Math.min(3, pinch0.z * Math.hypot(a.x-b.x, a.y-b.y) / pinch0.d)); placeCamera();
+    }
+  });
+  const endPtr = e => { pointers.delete(e.pointerId); if (pointers.size < 2) pinch0 = null; if (!pointers.size) stage.classList.remove('dragging'); };
+  el.addEventListener('pointerup', endPtr); el.addEventListener('pointercancel', endPtr);
+  el.addEventListener('wheel', e => { e.preventDefault(); view.zoom = Math.max(0.5, Math.min(3, view.zoom * Math.exp(-e.deltaY*0.0012))); placeCamera(); }, { passive:false });
+
+  function resize(){
+    const w = stage.clientWidth, h = stage.clientHeight;
+    if (!w || !h) return;
+    renderer.setSize(w, h, false); camera.aspect = w/h; camera.updateProjectionMatrix(); dirty = true;
+  }
+  new ResizeObserver(resize).observe(stage);
+
+  // ---------- loop ----------
+  let dirty = true, lastTs = null;
+  const BASE_PERIOD = 2.4; // seconds per cycle at the base rate
+  function frame(ts){
+    if (state.playing){
+      if (lastTs !== null){
+        const dt = Math.min(0.05, (ts - lastTs)/1000);
+        const rate = state.realSpeed ? ZEROS[state.n][state.k-1]/ZEROS[0][0] * 0.6 : 1;
+        state.t = (state.t + dt * 2*Math.PI/BASE_PERIOD * rate) % (2*Math.PI);
+        updateTime();
+      }
+      lastTs = ts;
+    }
+    if (dirty){ renderer.render(scene, camera); dirty = false; }
+    requestAnimationFrame(frame);
+  }
+
+  applyTheme(); placeCamera(); resize(); setMode();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
