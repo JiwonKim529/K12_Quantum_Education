@@ -1,0 +1,560 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="3D hydrogen atom orbital viewer with phase colouring and time evolution.">
+<title>Hydrogen Orbital Viewer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Deliberately single dark look: an instrument display over a black field */
+:root{
+  --bg:#0a0b0f; --panel:#14161d; --panel-2:#1b1e27; --line:#272b37; --line-2:#383d4c;
+  --fg:#e8ebf2; --muted:#8e94a6; --accent:#c4f23a; --accent-fg:#0d1004;
+  --sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{height:100%}
+body{background:var(--bg);color:var(--fg);font-family:var(--sans);font-size:14px;line-height:1.45;margin:0}
+.app{height:100dvh;min-height:560px;display:grid;grid-template-columns:minmax(0,1fr) 300px}
+/* ---------- view ---------- */
+.view{position:relative;min-width:0;background:#000;overflow:hidden;touch-action:none;cursor:grab;
+  padding-left:env(safe-area-inset-left,0px)}
+.view.drag{cursor:grabbing}
+#gl,#ov{position:absolute;inset:0;width:100%;height:100%;display:block}
+#ov{pointer-events:none}
+.wf{position:absolute;top:calc(12px + env(safe-area-inset-top,0px));right:12px;display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;max-width:calc(100% - 24px)}
+select{background:var(--panel);color:var(--fg);border:1px solid var(--line-2);border-radius:7px;padding:6px 8px;font:500 13px var(--sans);min-width:0;cursor:pointer}
+select:hover{border-color:var(--muted)}
+select:focus-visible,input:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.info{position:absolute;left:calc(14px + env(safe-area-inset-left,0px));top:calc(12px + env(safe-area-inset-top,0px));pointer-events:none;display:flex;flex-direction:column;gap:3px}
+.info .big{font:700 28px/1.05 var(--sans)}
+.info .big sub{font-size:.55em;font-weight:600}
+.info .sub{font:400 12.5px var(--mono);color:var(--muted)}
+.radial{position:absolute;left:calc(12px + env(safe-area-inset-left,0px));bottom:calc(12px + env(safe-area-inset-bottom,0px));width:270px;height:118px;background:rgba(20,22,29,.86);border:1px solid var(--line-2);border-radius:10px;pointer-events:none}
+.radial canvas{width:100%;height:100%;display:block}
+.dims{position:absolute;right:12px;bottom:calc(12px + env(safe-area-inset-bottom,0px));font:400 12px var(--mono);color:var(--muted);pointer-events:none;text-align:right}
+.fallback{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:24px;text-align:center;color:var(--muted)}
+/* ---------- panel ---------- */
+.panel{background:var(--panel);border-left:1px solid var(--line);overflow-y:auto;min-width:0;display:flex;flex-direction:column;gap:14px;
+  padding-block:16px 22px;padding-left:16px;padding-right:max(16px,env(safe-area-inset-right,0px))}
+.brand{display:flex;flex-direction:column;gap:2px}
+.brand .eyebrow{font:600 10.5px/1 var(--sans);letter-spacing:.15em;text-transform:uppercase;color:var(--accent)}
+.brand h1{margin:0;font:700 19px/1.2 var(--sans)}
+.sec{display:flex;flex-direction:column;gap:9px;border-top:1px solid var(--line);padding-top:13px}
+.sec>h2{margin:0;font:600 10.5px/1 var(--sans);letter-spacing:.13em;text-transform:uppercase;color:var(--muted)}
+.btns{display:flex;gap:6px;flex-wrap:wrap}
+.btn{font:600 13px var(--sans);color:var(--fg);background:var(--panel-2);border:1px solid var(--line-2);border-radius:7px;padding:6px 11px;cursor:pointer;min-height:32px}
+.btn:hover{border-color:var(--muted)}
+.check{display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13.5px}
+.check input{accent-color:var(--accent);width:15px;height:15px;margin:0;flex:none}
+.sl{display:flex;flex-direction:column;gap:4px}
+.sl .top{display:flex;justify-content:space-between;font-size:13px}
+.sl output{font:500 12px var(--mono);color:var(--muted)}
+input[type=range]{width:100%;accent-color:var(--accent);margin:0}
+.panel select{width:100%}
+.help{margin:0;color:var(--muted);font-size:12.5px}
+.help b{color:var(--fg);font-weight:600}
+.legend{display:flex;gap:12px;align-items:center}
+.wheel{width:52px;height:52px;border-radius:50%;flex:none;position:relative}
+.wheel::after{content:"";position:absolute;inset:15px;border-radius:50%;background:var(--panel)}
+.sw{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:3px}
+.credit{font-size:11.5px;color:var(--muted)}
+.credit a{color:var(--muted)}
+@media (max-width:860px){
+  .app{grid-template-columns:minmax(0,1fr);height:auto}
+  .view{height:72vh;min-height:420px}
+  .panel{border-left:0;border-top:1px solid var(--line);overflow:visible;padding-left:max(16px,env(safe-area-inset-left,0px))}
+  .info{top:auto;bottom:calc(140px + env(safe-area-inset-bottom,0px))}
+  .info .big{font-size:22px}
+  .radial{width:200px;height:96px}
+  .dims{bottom:auto;top:calc(12px + env(safe-area-inset-top,0px));display:none}
+  .wf{left:12px;right:12px;justify-content:flex-start}
+  .wf select{flex:1 1 auto}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <main class="view" id="view" aria-label="3D view of the hydrogen wave function. Drag to rotate.">
+    <canvas id="gl"></canvas>
+    <canvas id="ov"></canvas>
+    <div class="info"><span class="big" id="stName">2s</span><span class="sub" id="stSub"></span><span class="sub" id="stE"></span></div>
+    <div class="wf" aria-label="Wave function">
+      <select id="selBasis" aria-label="Orbital type"><option value="real" selected>Real Orbitals</option><option value="complex">Complex Orbitals</option></select>
+      <select id="selN" aria-label="n"></select>
+      <select id="selL" aria-label="l"></select>
+      <select id="selM" aria-label="m"></select>
+    </div>
+    <div class="radial" id="radialBox"><canvas id="radial"></canvas></div>
+    <div class="dims" id="dims"></div>
+  </main>
+
+  <aside class="panel" aria-label="Controls">
+    <div class="brand">
+      <span class="eyebrow">Hydrogen atom</span>
+      <h1>Orbital Viewer</h1>
+    </div>
+
+    <div class="sec">
+      <h2>Time evolution</h2>
+      <label class="check"><input type="checkbox" id="stopped"> Stopped</label>
+      <div class="sl"><div class="top"><span>Simulation Speed</span><output id="speedv">1×</output></div>
+        <input type="range" id="speed" min="-1.3" max="0.7" step="0.01" value="0" aria-label="Simulation speed"></div>
+      <label class="check"><input type="checkbox" id="positive" checked> Make Energies Positive</label>
+    </div>
+
+    <div class="sec">
+      <h2>View</h2>
+      <select id="slice" aria-label="Slice">
+        <option value="-1" selected>No Slicing</option>
+        <option value="0">Slice x = …</option>
+        <option value="1">Slice y = …</option>
+        <option value="2">Slice z = …</option>
+      </select>
+      <div class="sl" id="slicePosRow" hidden><div class="top"><span>Slice position</span><output id="slicePosv">0 a₀</output></div>
+        <input type="range" id="slicePos" min="-1" max="1" step="0.005" value="0" aria-label="Slice position"></div>
+      <div class="sl"><div class="top"><span>Brightness</span><output id="brightv">1.0×</output></div>
+        <input type="range" id="bright" min="-1.3" max="1.3" step="0.01" value="0" aria-label="Brightness"></div>
+      <div class="sl"><div class="top"><span>Image Resolution</span><output id="resv">Medium</output></div>
+        <input type="range" id="res" min="0" max="3" step="1" value="1" aria-label="Image resolution"></div>
+      <div class="sl"><div class="top"><span>Scale</span><output id="scalev"></output></div>
+        <input type="range" id="scale" min="0" max="1" step="0.001" value="0.5" aria-label="Scale"></div>
+      <div class="btns"><button class="btn" id="resetView" type="button">Reset view</button></div>
+    </div>
+
+    <div class="sec">
+      <h2>Settings</h2>
+      <label class="check"><input type="checkbox" id="phaseColor" checked> Phase as Color</label>
+      <select id="palette" aria-label="Phase colours">
+        <option value="0" selected>High-contrast colours</option>
+        <option value="1">Rainbow hue</option>
+      </select>
+      <label class="check"><input type="checkbox" id="radialOn" checked> Radial Distribution</label>
+      <label class="check"><input type="checkbox" id="axes" checked> Show Axes</label>
+      <label class="check"><input type="checkbox" id="dimsOn" checked> Show Dimensions</label>
+      <label class="check"><input type="checkbox" id="autoScale" checked> Auto Scale</label>
+    </div>
+
+    <div class="sec">
+      <h2>Phase colour</h2>
+      <div class="legend"><div class="wheel" id="wheel"></div><p class="help" id="legendTxt"></p></div>
+      <p class="help">Brightness shows probability density |ψ|². Colour shows the phase of ψ, so regions of opposite sign have opposite colours.</p>
+    </div>
+
+    <div class="sec">
+      <h2>How to use</h2>
+      <p class="help">Pick the wave function with the menus at the upper right. <b>Drag</b> to rotate the view, <b>scroll</b> or <b>pinch</b> to zoom.</p>
+      <p class="credit">Modelled on Paul Falstad’s <a href="https://www.falstad.com/qmatom/" target="_blank" rel="noopener">Hydrogen Atom Orbital Viewer</a>.</p>
+    </div>
+  </aside>
+</div>
+
+<script>
+(function(){
+"use strict";
+const $=id=>document.getElementById(id);
+const A0_PM=52.9177;
+const NMAX=8;
+const LETTER=['s','p','d','f','g','h','i','k'];
+const REALNAMES={ // [label html, plain]
+  '1,0':['p<sub>z</sub>'],'1,1':['p<sub>x</sub>'],'1,-1':['p<sub>y</sub>'],
+  '2,0':['d<sub>z²</sub>'],'2,1':['d<sub>xz</sub>'],'2,-1':['d<sub>yz</sub>'],'2,-2':['d<sub>xy</sub>'],'2,2':['d<sub>x²−y²</sub>'],
+  '3,0':['f<sub>z³</sub>'],'3,1':['f<sub>xz²</sub>'],'3,-1':['f<sub>yz²</sub>'],'3,-2':['f<sub>xyz</sub>'],'3,2':['f<sub>z(x²−y²)</sub>'],'3,3':['f<sub>x(x²−3y²)</sub>'],'3,-3':['f<sub>y(3x²−y²)</sub>']
+};
+const REALPLAIN={'1,0':'pz','1,1':'px','1,-1':'py','2,0':'dz²','2,1':'dxz','2,-1':'dyz','2,-2':'dxy','2,2':'dx²−y²',
+  '3,0':'fz³','3,1':'fxz²','3,-1':'fyz²','3,-2':'fxyz','3,2':'fz(x²−y²)','3,3':'fx(x²−3y²)','3,-3':'fy(3x²−y²)'};
+
+const S={ n:2, l:0, m:0, real:true, stopped:false, speed:1, positive:true, slice:-1, slicePos:0,
+  bright:1, res:1, phaseColor:true, palette:0, radialOn:true, axes:true, dimsOn:true, autoScale:true,
+  phase:0, t:0, viewW:30 };
+
+// ---------------- palette (mirrors the shader) ----------------
+const PAL0=[[0.72,1.0,0.16],[1.0,0.30,0.22],[0.50,0.20,1.0],[0.06,0.82,1.0]]; // phase 0, π/2, π, 3π/2
+const sm=f=>f*f*(3-2*f);
+function palJS(a){
+  a=((a%1)+1)%1;
+  if(S.palette===1){ const h=a*6, x=1-Math.abs(h%2-1), k=Math.floor(h)%6; return [[1,x,0],[x,1,0],[0,1,x],[0,x,1],[x,0,1],[1,0,x]][k]; }
+  const s=a*4, i=Math.floor(s)%4, f=sm(s-Math.floor(s)), P=PAL0[i], Q=PAL0[(i+1)%4];
+  return [P[0]+(Q[0]-P[0])*f, P[1]+(Q[1]-P[1])*f, P[2]+(Q[2]-P[2])*f];
+}
+const css=c=>`rgb(${c.map(v=>Math.round(Math.min(1,v)*255)).join(',')})`;
+function updateLegend(){
+  const st=[]; for(let i=0;i<=36;i++){ const a=i/36; st.push(`${css(S.phaseColor?palJS(a):[1,1,1])} ${(a*360).toFixed(1)}deg`); }
+  $('wheel').style.background=`conic-gradient(from 90deg, ${st.join(',')})`;
+  $('legendTxt').innerHTML = S.phaseColor
+    ? `<span class="sw" style="background:${css(palJS(0))}"></span>phase 0 (+) is opposite <span class="sw" style="background:${css(palJS(0.5))}"></span>phase π (−).`
+    : 'Phase as Color is off: only density is shown.';
+}
+
+// ---------------- wave function ----------------
+const fact=k=>{let r=1;for(let i=2;i<=k;i++)r*=i;return r;};
+const binom=(a,b)=>fact(a)/(fact(b)*fact(a-b));
+let coefs=[1], deg=0;
+function assocLeg(l,m,x){
+  let pmm=1;
+  if(m>0){ const s=Math.sqrt(Math.max(0,(1-x)*(1+x))); let f=1; for(let i=1;i<=m;i++){ pmm*=f*s; f+=2; } }
+  if(l===m) return pmm;
+  let pmmp1=x*(2*m+1)*pmm; if(l===m+1) return pmmp1;
+  let pll=0; for(let L2=m+2;L2<=l;L2++){ pll=(x*(2*L2-1)*pmmp1-(L2+m-1)*pmm)/(L2-m); pmm=pmmp1; pmmp1=pll; }
+  return pll;
+}
+function radialJS(r){ const rho=2*r/S.n; let poly=0,xp=1; for(let i=0;i<=deg;i++){poly+=coefs[i]*xp;xp*=rho;} return Math.exp(-0.5*rho)*Math.pow(rho,S.l)*poly; }
+function psi2JS(x,y,z){ // |psi|^2 (unnormalised)
+  const r=Math.hypot(x,y,z); const R=radialJS(r); const ct=r>1e-9?z/r:1; const am=Math.abs(S.m);
+  const P=assocLeg(S.l,am,ct); let ang=1;
+  if(S.real && am>0){ const ph=am*Math.atan2(y,x); ang=S.m>0?Math.cos(ph):Math.sin(ph); }
+  const v=R*P*ang; return v*v;
+}
+let L=10, ampScale=1, projNorm=1, autoB=3, autoBSlice=3, dtSteps=1;
+function prepare(){
+  const k=S.n-S.l-1; deg=k; coefs=[]; for(let i=0;i<=k;i++) coefs.push(((i%2)?-1:1)*binom(k+2*S.l+1,k-i)/fact(i));
+  // radius holding 99.7% of the radial probability
+  const rmax=8*S.n*S.n+25, N=3000; let tot=0; const cum=new Float64Array(N+1);
+  for(let i=1;i<=N;i++){ const r=rmax*i/N, R=radialJS(r); tot+=R*R*r*r; cum[i]=tot; }
+  let r997=rmax; for(let i=1;i<=N;i++) if(cum[i]>=0.997*tot){ r997=rmax*i/N; break; }
+  L=Math.max(4,r997*1.05);
+  // max |psi|^2 inside the sphere
+  let mx=1e-300; const G=48;
+  for(let i=0;i<G;i++)for(let j=0;j<G;j++)for(let q=0;q<G;q++){
+    const x=-L+2*L*(i+.5)/G,y=-L+2*L*(j+.5)/G,z=-L+2*L*(q+.5)/G; const v=psi2JS(x,y,z); if(v>mx) mx=v; }
+  for(let i=0;i<=600;i++){ const r=L*i/600; for(const d of [[0,0,1],[0,0,-1],[1,0,0],[0,1,0],[.7071,.7071,0],[.7071,0,.7071],[0,.7071,.7071],[.5774,.5774,.5774]]){ const v=psi2JS(d[0]*r,d[1]*r,d[2]*r); if(v>mx) mx=v; } }
+  ampScale=1/Math.sqrt(mx);
+  // projected density (line integrals) along z and x, to set exposure automatically
+  const R2=24, ST=96, vals=[]; let pmax=1e-30;
+  for(const axis of [2,0]) for(let i=0;i<R2;i++) for(let j=0;j<R2;j++){
+    const a=-L+2*L*(i+.5)/R2, b=-L+2*L*(j+.5)/R2; if(a*a+b*b>L*L) continue;
+    const h=Math.sqrt(L*L-a*a-b*b), dt=2*h/ST; let s=0;
+    for(let q=0;q<ST;q++){ const c=-h+dt*(q+.5); const p= axis===2?[a,b,c]:[c,a,b]; s+=psi2JS(p[0],p[1],p[2])/mx*dt; }
+    vals.push(s); if(s>pmax) pmax=s;
+  }
+  projNorm=1/pmax;
+  const nz=vals.map(v=>v/pmax).filter(v=>v>0.02).sort((a,b)=>a-b);
+  const p50=nz.length?nz[Math.floor(nz.length*0.5)]:0.2;
+  autoB=Math.min(40,Math.max(0.8,0.35/p50));
+  // slice exposure from the z=0 / x=0 planes
+  const sv=[]; for(let i=0;i<40;i++)for(let j=0;j<40;j++){ const a=-L+2*L*(i+.5)/40,b=-L+2*L*(j+.5)/40; sv.push(psi2JS(a,b,0)/mx, psi2JS(0,a,b)/mx); }
+  const snz=sv.filter(v=>v>0.004).sort((a,b)=>a-b);
+  const s50=snz.length?snz[Math.floor(snz.length*0.5)]:0.1;
+  autoBSlice=Math.min(400,Math.max(1.5,0.45/s50));
+}
+
+// ---------------- WebGL ----------------
+const view=$('view'), cv=$('gl'), ov=$('ov'), ox=ov.getContext('2d');
+const gl=cv.getContext('webgl2',{antialias:false,alpha:false});
+function fail(m){ view.insertAdjacentHTML('beforeend',`<div class="fallback">${m}</div>`); }
+if(!gl) fail('This viewer needs WebGL 2. Try a recent Chrome, Edge, Firefox or Safari.');
+
+const VS=`#version 300 es
+in vec2 aPos; void main(){ gl_Position=vec4(aPos,0.0,1.0); }`;
+const FS=`#version 300 es
+precision highp float; precision highp int;
+out vec4 outColor;
+uniform vec2 uRes; uniform vec3 uCamPos,uFwd,uRight,uUp; uniform float uTanFov;
+uniform float uL,uN; uniform int uLq,uM,uDeg; uniform bool uReal;
+uniform float uCoef[8]; uniform float uAmp,uPhase;
+uniform bool uColor; uniform int uPalette;
+uniform float uBright,uProj; uniform int uSteps;
+uniform int uSlice; uniform float uSlicePos;
+
+vec2 cmul(vec2 a,vec2 b){ return vec2(a.x*b.x-a.y*b.y, a.x*b.y+a.y*b.x); }
+float assocLeg(int l,int m,float x){
+  float pmm=1.0;
+  if(m>0){ float s=sqrt(max(0.0,(1.0-x)*(1.0+x))); float f=1.0; for(int i=1;i<=8;i++){ if(i>m) break; pmm*=f*s; f+=2.0; } }
+  if(l==m) return pmm;
+  float pmmp1=x*float(2*m+1)*pmm;
+  if(l==m+1) return pmmp1;
+  float pll=0.0;
+  for(int k=2;k<=9;k++){ int L2=m+k; if(L2>l) break;
+    pll=(x*float(2*L2-1)*pmmp1-float(L2+m-1)*pmm)/float(L2-m); pmm=pmmp1; pmmp1=pll; }
+  return pll;
+}
+vec2 psi(vec3 p){
+  float r=length(p), rho=2.0*r/uN;
+  float poly=0.0, xp=1.0;
+  for(int i=0;i<8;i++){ if(i>uDeg) break; poly+=uCoef[i]*xp; xp*=rho; }
+  float rl=1.0; for(int i=0;i<8;i++){ if(i>=uLq) break; rl*=rho; }
+  float rad=exp(-0.5*rho)*rl*poly;
+  float ct = r>1e-6 ? p.z/r : 1.0;
+  int am=abs(uM);
+  float P=assocLeg(uLq,am,ct);
+  vec2 ang=vec2(1.0,0.0);
+  if(am>0){
+    float ph = (abs(p.x)+abs(p.y)>1e-9) ? float(am)*atan(p.y,p.x) : 0.0;
+    if(uReal) ang=vec2(uM>0?cos(ph):sin(ph),0.0);
+    else ang=vec2(cos(ph), (uM<0?-1.0:1.0)*sin(ph));
+  }
+  return cmul(rad*P*uAmp*ang, vec2(cos(uPhase),sin(uPhase)));
+}
+float sm(float f){ return f*f*(3.0-2.0*f); }
+vec3 pal(float a){
+  if(uPalette==1) return clamp(abs(mod(a*6.0+vec3(0.0,4.0,2.0),6.0)-3.0)-1.0,0.0,1.0);
+  vec3 c0=vec3(0.72,1.0,0.16), c1=vec3(1.0,0.30,0.22), c2=vec3(0.50,0.20,1.0), c3=vec3(0.06,0.82,1.0);
+  float s=a*4.0; int i=int(floor(s)); float f=sm(fract(s));
+  if(i==0) return mix(c0,c1,f); if(i==1) return mix(c1,c2,f); if(i==2) return mix(c2,c3,f); return mix(c3,c0,f);
+}
+vec3 hue(vec2 v){ return uColor ? pal(fract(atan(v.y,v.x)/6.2831853+1.0)) : vec3(1.0); }
+float hash(vec2 p){ return fract(sin(dot(p,vec2(12.9898,78.233)))*43758.5453); }
+void main(){
+  vec2 ndc=(gl_FragCoord.xy/uRes)*2.0-1.0;
+  vec3 rd=normalize(uFwd+ndc.x*uTanFov*(uRes.x/uRes.y)*uRight+ndc.y*uTanFov*uUp);
+  vec3 ro=uCamPos;
+  vec3 col=vec3(0.0);
+  if(uSlice<0){
+    float b=dot(ro,rd), c=dot(ro,ro)-uL*uL, h=b*b-c;
+    if(h>0.0){
+      float sq=sqrt(h), tn=max(-b-sq,0.0), tf=-b+sq;
+      float dt=2.0*uL/float(uSteps);
+      float t=tn+dt*hash(gl_FragCoord.xy);
+      vec3 C=vec3(0.0); float I=0.0;
+      for(int i=0;i<1024;i++){
+        if(t>tf) break;
+        vec2 v=psi(ro+rd*t); float d=dot(v,v);
+        if(d>1e-9){ C+=d*hue(v); I+=d; }
+        t+=dt;
+      }
+      if(I>0.0){
+        vec3 hc=C/I; float mc=max(hc.r,max(hc.g,hc.b)); hc/=max(mc,1e-3);
+        col=hc*(1.0-exp(-uBright*I*dt*uProj));
+      }
+    }
+  } else {
+    float o = uSlice==0 ? ro.x : (uSlice==1 ? ro.y : ro.z);
+    float dd = uSlice==0 ? rd.x : (uSlice==1 ? rd.y : rd.z);
+    if(abs(dd)>1e-6){
+      float t=(uSlicePos-o)/dd;
+      vec3 p=ro+rd*t;
+      if(t>0.0 && all(lessThanEqual(abs(p),vec3(uL*1.0001)))){
+        vec2 v=psi(p); float d=dot(v,v);
+        col=hue(v)*(1.0-exp(-uBright*d));
+      }
+    }
+  }
+  outColor=vec4(col,1.0);
+}`;
+let prog=null; const U={};
+if(gl){
+  const sh=(t,src)=>{ const s=gl.createShader(t); gl.shaderSource(s,src); gl.compileShader(s); if(!gl.getShaderParameter(s,gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s)); return s; };
+  try{ prog=gl.createProgram(); gl.attachShader(prog,sh(gl.VERTEX_SHADER,VS)); gl.attachShader(prog,sh(gl.FRAGMENT_SHADER,FS)); gl.linkProgram(prog);
+    if(!gl.getProgramParameter(prog,gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog)); }
+  catch(e){ console.error(e); prog=null; fail('The 3D view could not start on this device.'); }
+  if(prog){
+    gl.useProgram(prog);
+    const buf=gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER,buf); gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,3,-1,-1,3]),gl.STATIC_DRAW);
+    const loc=gl.getAttribLocation(prog,'aPos'); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc,2,gl.FLOAT,false,0,0);
+    ['uRes','uCamPos','uFwd','uRight','uUp','uTanFov','uL','uN','uLq','uM','uDeg','uReal','uCoef','uAmp','uPhase','uColor','uPalette','uBright','uProj','uSteps','uSlice','uSlicePos'].forEach(n=>U[n]=gl.getUniformLocation(prog,n));
+  }
+}
+
+// ---------------- camera ----------------
+const FOV=30*Math.PI/180, TAN=Math.tan(FOV/2);
+const CAM0={az:-Math.PI/2+0.55, el:0.32};
+// Free (trackball) orientation: the camera frame r (right), u (up), f (forward) is rotated directly,
+// so the view can turn a full 360° about any axis with no pole stop.
+const cam={};
+function frameFromAngles(az,el){
+  const ce=Math.cos(el), f=[-ce*Math.cos(az),-ce*Math.sin(az),-Math.sin(el)];
+  let r=[f[1],-f[0],0]; const rl=Math.hypot(r[0],r[1])||1; r=[r[0]/rl,r[1]/rl,0];
+  const u=[r[1]*f[2]-r[2]*f[1], r[2]*f[0]-r[0]*f[2], r[0]*f[1]-r[1]*f[0]];
+  return {r,u,f};
+}
+function resetCam(){ Object.assign(cam,frameFromAngles(CAM0.az,CAM0.el)); }
+resetCam();
+function rotVec(v,n,c,s){ // Rodrigues: rotate v about unit axis n
+  const d=v[0]*n[0]+v[1]*n[1]+v[2]*n[2], x=[n[1]*v[2]-n[2]*v[1], n[2]*v[0]-n[0]*v[2], n[0]*v[1]-n[1]*v[0]];
+  return [v[0]*c+x[0]*s+n[0]*d*(1-c), v[1]*c+x[1]*s+n[1]*d*(1-c), v[2]*c+x[2]*s+n[2]*d*(1-c)];
+}
+const norm=v=>{ const l=Math.hypot(v[0],v[1],v[2])||1; return [v[0]/l,v[1]/l,v[2]/l]; };
+function orbit(dx,dy){
+  const len=Math.hypot(dx,dy); if(!len) return;
+  const n=norm([cam.u[0]*dx+cam.r[0]*dy, cam.u[1]*dx+cam.r[1]*dy, cam.u[2]*dx+cam.r[2]*dy]);
+  const a=-len*0.008, c=Math.cos(a), s=Math.sin(a);
+  let f=norm(rotVec(cam.f,n,c,s)), u=rotVec(cam.u,n,c,s);
+  let r=norm([f[1]*u[2]-f[2]*u[1], f[2]*u[0]-f[0]*u[2], f[0]*u[1]-f[1]*u[0]]); // r = f × u
+  u=[r[1]*f[2]-r[2]*f[1], r[2]*f[0]-r[0]*f[2], r[0]*f[1]-r[1]*f[0]];         // u = r × f
+  cam.r=r; cam.u=u; cam.f=f;
+}
+function basis(){
+  const asp=view.clientWidth/Math.max(1,view.clientHeight), d=(S.viewW/2)/(TAN*Math.min(1,asp));
+  const f=cam.f, pos=[-f[0]*d,-f[1]*d,-f[2]*d];
+  return {pos,f,r:cam.r,u:cam.u,d};
+}
+// scale slider ↔ view width (a0), log scale 3 … 600 a0
+const W_MIN=3, W_MAX=600;
+const w2s=w=>Math.log(w/W_MIN)/Math.log(W_MAX/W_MIN), s2w=s=>W_MIN*Math.pow(W_MAX/W_MIN,s);
+function autoWidth(){ return 2*L*0.92; }
+
+// ---------------- sizing ----------------
+const RES=[{s:0.5,steps:120,name:'Low'},{s:0.75,steps:180,name:'Medium'},{s:1,steps:260,name:'High'},{s:1.5,steps:340,name:'Very high'}];
+let dirty=true;
+function resize(){
+  const w=view.clientWidth, h=view.clientHeight; if(!w||!h) return;
+  const dpr=Math.min(window.devicePixelRatio||1,2);
+  cv.width=Math.max(1,Math.round(w*RES[S.res].s*Math.min(dpr,1.25))); cv.height=Math.max(1,Math.round(h*RES[S.res].s*Math.min(dpr,1.25)));
+  ov.width=Math.round(w*dpr); ov.height=Math.round(h*dpr);
+  const rc=$('radial'); rc.width=Math.round(rc.clientWidth*dpr); rc.height=Math.round(rc.clientHeight*dpr);
+  drawRadial(); dirty=true;
+}
+new ResizeObserver(resize).observe(view);
+
+// ---------------- draw ----------------
+function draw(){
+  const b=basis();
+  if(prog){
+    gl.viewport(0,0,cv.width,cv.height);
+    gl.uniform2f(U.uRes,cv.width,cv.height);
+    gl.uniform3fv(U.uCamPos,b.pos); gl.uniform3fv(U.uFwd,b.f); gl.uniform3fv(U.uRight,b.r); gl.uniform3fv(U.uUp,b.u); gl.uniform1f(U.uTanFov,TAN);
+    gl.uniform1f(U.uL,L); gl.uniform1f(U.uN,S.n); gl.uniform1i(U.uLq,S.l); gl.uniform1i(U.uM,S.m); gl.uniform1i(U.uDeg,deg); gl.uniform1i(U.uReal,S.real?1:0);
+    const c8=new Float32Array(8); coefs.forEach((v,i)=>c8[i]=v); gl.uniform1fv(U.uCoef,c8);
+    gl.uniform1f(U.uAmp,ampScale); gl.uniform1f(U.uPhase,S.phase);
+    gl.uniform1i(U.uColor,S.phaseColor?1:0); gl.uniform1i(U.uPalette,S.palette);
+    gl.uniform1f(U.uBright,(S.slice<0?autoB:autoBSlice)*S.bright); gl.uniform1f(U.uProj,projNorm);
+    gl.uniform1i(U.uSteps,RES[S.res].steps); gl.uniform1i(U.uSlice,S.slice); gl.uniform1f(U.uSlicePos,S.slicePos*L);
+    gl.drawArrays(gl.TRIANGLES,0,3);
+  }
+  drawOverlay(b);
+}
+function project(p,b,W,H){
+  const rel=[p[0]-b.pos[0],p[1]-b.pos[1],p[2]-b.pos[2]];
+  const z=rel[0]*b.f[0]+rel[1]*b.f[1]+rel[2]*b.f[2]; if(z<=0.01) return null;
+  const x=(rel[0]*b.r[0]+rel[1]*b.r[1]+rel[2]*b.r[2])/(z*TAN*(W/H)), y=(rel[0]*b.u[0]+rel[1]*b.u[1]+rel[2]*b.u[2])/(z*TAN);
+  return [(x*0.5+0.5)*W,(0.5-y*0.5)*H];
+}
+function line(a,b2,bas,W,H){ const p=project(a,bas,W,H), q=project(b2,bas,W,H); if(!p||!q) return; ox.beginPath(); ox.moveTo(p[0],p[1]); ox.lineTo(q[0],q[1]); ox.stroke(); }
+function drawOverlay(b){
+  const W=ov.width,H=ov.height,dpr=W/Math.max(1,view.clientWidth); ox.clearRect(0,0,W,H);
+  if(S.slice>=0){
+    ox.strokeStyle='rgba(200,206,222,.45)'; ox.lineWidth=1*dpr;
+    const c=[-L,L]; for(const a of c)for(const bb of c){ line([-L,a,bb],[L,a,bb],b,W,H); line([a,-L,bb],[a,L,bb],b,W,H); line([a,bb,-L],[a,bb,L],b,W,H); }
+    // slice outline
+    ox.strokeStyle='rgba(196,242,58,.9)'; ox.lineWidth=1.5*dpr; const s=S.slicePos*L, k=S.slice;
+    const P=(u,v)=>k===0?[s,u,v]:(k===1?[u,s,v]:[u,v,s]);
+    line(P(-L,-L),P(L,-L),b,W,H); line(P(L,-L),P(L,L),b,W,H); line(P(L,L),P(-L,L),b,W,H); line(P(-L,L),P(-L,-L),b,W,H);
+  }
+  if(S.axes){
+    const len=Math.min(L,S.viewW*0.45);
+    const ax=[['x',[1,0,0],'#ff6b5b'],['y',[0,1,0],'#6fe07c'],['z',[0,0,1],'#5fb0ff']];
+    ox.font=`600 ${13*dpr}px "IBM Plex Sans", system-ui, sans-serif`; ox.textAlign='center'; ox.textBaseline='middle';
+    for(const [n,v,c] of ax){
+      ox.strokeStyle=c; ox.globalAlpha=0.35; ox.lineWidth=1*dpr; ox.setLineDash([4*dpr,4*dpr]);
+      line([0,0,0],[-v[0]*len,-v[1]*len,-v[2]*len],b,W,H); ox.setLineDash([]);
+      ox.globalAlpha=0.85; ox.lineWidth=1.5*dpr; line([0,0,0],[v[0]*len,v[1]*len,v[2]*len],b,W,H);
+      const p=project([v[0]*len*1.07,v[1]*len*1.07,v[2]*len*1.07],b,W,H); if(p){ ox.globalAlpha=1; ox.fillStyle=c; ox.fillText(n,p[0],p[1]); }
+    }
+    ox.globalAlpha=1;
+  }
+}
+function drawRadial(){
+  const rc=$('radial'), g=rc.getContext('2d'), W=rc.width, H=rc.height, dpr=W/Math.max(1,rc.clientWidth);
+  g.clearRect(0,0,W,H); if(!W) return;
+  const padL=10*dpr, padR=10*dpr, padT=22*dpr, padB=20*dpr, rMax=L;
+  const N=240; let mx=0; const ys=[];
+  for(let i=0;i<=N;i++){ const r=rMax*i/N, R=radialJS(r), y=r*r*R*R; ys.push(y); if(y>mx) mx=y; }
+  g.fillStyle='#8e94a6'; g.font=`500 ${11*dpr}px "IBM Plex Sans", system-ui, sans-serif`; g.textBaseline='top';
+  g.fillText('Radial distribution  r²R²(r)',padL,6*dpr);
+  const X=r=>padL+(W-padL-padR)*r/rMax, Y=y=>H-padB-(H-padT-padB)*y/mx;
+  g.strokeStyle='#383d4c'; g.lineWidth=1*dpr; g.beginPath(); g.moveTo(padL,H-padB); g.lineTo(W-padR,H-padB); g.stroke();
+  // ticks at multiples of the Bohr radius
+  const step = rMax>60?10:(rMax>25?5:(rMax>10?2:1));
+  g.textBaseline='top'; g.textAlign='center';
+  for(let r=0;r<=rMax+1e-9;r+=1){ const x=X(r), major=Math.abs(r/step-Math.round(r/step))<1e-6; if(!major && rMax>40) continue;
+    g.beginPath(); g.moveTo(x,H-padB); g.lineTo(x,H-padB+(major?5:3)*dpr); g.stroke();
+    if(major && r>0) g.fillText(String(r),x,H-padB+6*dpr); }
+  g.textAlign='right'; g.fillText('a₀',W-padR,H-padB+6*dpr); g.textAlign='left';
+  g.beginPath(); ys.forEach((y,i)=>{ const x=X(rMax*i/N), yy=Y(y); i?g.lineTo(x,yy):g.moveTo(x,yy); });
+  g.strokeStyle='#c4f23a'; g.lineWidth=1.6*dpr; g.stroke();
+  g.lineTo(X(rMax),H-padB); g.lineTo(X(0),H-padB); g.closePath(); g.fillStyle='rgba(196,242,58,.12)'; g.fill();
+}
+
+// ---------------- menus ----------------
+function fillSelect(sel,items,val){ sel.innerHTML=items.map(([v,t])=>`<option value="${v}"${v==val?' selected':''}>${t}</option>`).join(''); }
+function mLabel(l,m){
+  if(S.real){
+    if(l===0) return 's';
+    const k=`${l},${m}`; if(REALPLAIN[k]) return REALPLAIN[k];
+    return m===0?`${LETTER[l]}, m = 0`:`${LETTER[l]}, m = ${Math.abs(m)} (${m>0?'cos':'sin'})`;
+  }
+  return `m = ${m>0?'+':''}${m}`;
+}
+function buildMenus(){
+  fillSelect($('selN'),Array.from({length:NMAX},(_,i)=>[i+1,`n = ${i+1}`]),S.n);
+  fillSelect($('selL'),Array.from({length:S.n},(_,l)=>[l,`l = ${l} (${LETTER[l]})`]),S.l);
+  const ms=[]; if(S.real){ ms.push(0); for(let k=1;k<=S.l;k++){ ms.push(k,-k); } } else for(let m=S.l;m>=-S.l;m--) ms.push(m);
+  fillSelect($('selM'),ms.map(m=>[m,mLabel(S.l,m)]),S.m);
+}
+function nameHTML(){
+  if(S.real){ const k=`${S.l},${S.m}`; if(S.l===0) return `${S.n}s`; if(REALNAMES[k]) return `${S.n}${REALNAMES[k][0]}`; return `${S.n}${LETTER[S.l]}`; }
+  return `|${S.n}, ${S.l}, ${S.m>0?'+':''}${S.m}⟩`;
+}
+function updateInfo(){
+  $('stName').innerHTML=nameHTML();
+  $('stSub').textContent=`n = ${S.n}, l = ${S.l}, m = ${S.m} · ${S.n-S.l-1} radial node${S.n-S.l-1===1?'':'s'}, ${S.l} angular`;
+  $('stE').textContent=`E = −13.6 eV / n² = ${(-13.6057/(S.n*S.n)).toFixed(3)} eV`;
+  $('scalev').textContent=`${Math.round(S.viewW*A0_PM).toLocaleString()} pm`;
+  $('dims').textContent=S.dimsOn?`view width ≈ ${Math.round(S.viewW*A0_PM).toLocaleString()} pm (${S.viewW.toFixed(1)} a₀)`:'';
+  $('slicePosv').textContent=`${(S.slicePos*L).toFixed(1)} a₀`;
+}
+function stateChanged(){
+  prepare(); buildMenus();
+  if(S.autoScale){ S.viewW=autoWidth(); $('scale').value=w2s(S.viewW); }
+  updateInfo(); drawRadial(); dirty=true;
+}
+$('selBasis').addEventListener('change',e=>{ S.real=e.target.value==='real'; stateChanged(); });
+$('selN').addEventListener('change',e=>{ S.n=+e.target.value; if(S.l>S.n-1){ S.l=S.n-1; } if(Math.abs(S.m)>S.l) S.m=0; stateChanged(); });
+$('selL').addEventListener('change',e=>{ S.l=+e.target.value; if(Math.abs(S.m)>S.l) S.m=0; stateChanged(); });
+$('selM').addEventListener('change',e=>{ S.m=+e.target.value; stateChanged(); });
+
+// ---------------- panel ----------------
+$('stopped').addEventListener('change',e=>{ S.stopped=e.target.checked; last=null; });
+const fmtX=v=>(v>=10?v.toFixed(0):(v>=1?v.toFixed(1):v.toFixed(2)))+'×';
+$('speed').addEventListener('input',e=>{ S.speed=Math.pow(10,+e.target.value); $('speedv').textContent=fmtX(S.speed); });
+$('positive').addEventListener('change',e=>{ S.positive=e.target.checked; });
+$('slice').addEventListener('change',e=>{ S.slice=+e.target.value; $('slicePosRow').hidden=S.slice<0; dirty=true; });
+$('slicePos').addEventListener('input',e=>{ S.slicePos=+e.target.value; updateInfo(); dirty=true; });
+$('bright').addEventListener('input',e=>{ S.bright=Math.pow(10,+e.target.value); $('brightv').textContent=fmtX(S.bright); dirty=true; });
+$('res').addEventListener('input',e=>{ S.res=+e.target.value; $('resv').textContent=RES[S.res].name; resize(); });
+$('scale').addEventListener('input',e=>{ S.viewW=s2w(+e.target.value); updateInfo(); dirty=true; });
+$('resetView').addEventListener('click',()=>{ resetCam(); S.viewW=autoWidth(); $('scale').value=w2s(S.viewW); updateInfo(); dirty=true; });
+$('phaseColor').addEventListener('change',e=>{ S.phaseColor=e.target.checked; updateLegend(); dirty=true; });
+$('palette').addEventListener('change',e=>{ S.palette=+e.target.value; updateLegend(); dirty=true; });
+$('radialOn').addEventListener('change',e=>{ S.radialOn=e.target.checked; $('radialBox').hidden=!S.radialOn; });
+$('axes').addEventListener('change',e=>{ S.axes=e.target.checked; dirty=true; });
+$('dimsOn').addEventListener('change',e=>{ S.dimsOn=e.target.checked; updateInfo(); });
+$('autoScale').addEventListener('change',e=>{ S.autoScale=e.target.checked; if(S.autoScale){ S.viewW=autoWidth(); $('scale').value=w2s(S.viewW); updateInfo(); dirty=true; } });
+
+// ---------------- mouse / touch ----------------
+const ptrs=new Map(); let pinch=null;
+function zoomBy(f){ S.viewW=Math.max(W_MIN,Math.min(W_MAX,S.viewW*f)); $('scale').value=w2s(S.viewW); updateInfo(); dirty=true; }
+cv.addEventListener('pointerdown',e=>{ cv.setPointerCapture(e.pointerId); ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY}); view.classList.add('drag');
+  if(ptrs.size===2){ const [a,b]=[...ptrs.values()]; pinch={d:Math.hypot(a.x-b.x,a.y-b.y),w:S.viewW}; } });
+cv.addEventListener('pointermove',e=>{ const p=ptrs.get(e.pointerId); if(!p) return;
+  const dx=e.clientX-p.x, dy=e.clientY-p.y; p.x=e.clientX; p.y=e.clientY;
+  if(ptrs.size===1){ orbit(dx,dy); dirty=true; }
+  else if(ptrs.size===2&&pinch){ const [a,b]=[...ptrs.values()]; const d=Math.hypot(a.x-b.x,a.y-b.y); S.viewW=Math.max(W_MIN,Math.min(W_MAX,pinch.w*pinch.d/d)); $('scale').value=w2s(S.viewW); updateInfo(); dirty=true; } });
+const up=e=>{ ptrs.delete(e.pointerId); if(ptrs.size<2) pinch=null; if(!ptrs.size) view.classList.remove('drag'); };
+cv.addEventListener('pointerup',up); cv.addEventListener('pointercancel',up);
+cv.addEventListener('wheel',e=>{ e.preventDefault(); zoomBy(Math.exp(e.deltaY*0.0012)); },{passive:false});
+
+// ---------------- loop ----------------
+let last=null; const BASE=4; // atomic time units per second at 1×
+function frame(ts){
+  if(!S.stopped){
+    if(last!==null){ const dt=Math.min(0.05,(ts-last)/1000);
+      const E=-1/(2*S.n*S.n)+(S.positive?1:0); // Hartree; offset of 1 Eh makes every energy positive
+      S.t+=dt*BASE*S.speed; S.phase-=E*dt*BASE*S.speed; S.phase%=2*Math.PI; dirty=true; }
+    last=ts;
+  }
+  if(dirty){ draw(); dirty=false; }
+  requestAnimationFrame(frame);
+}
+stateChanged(); updateLegend(); resize();
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
