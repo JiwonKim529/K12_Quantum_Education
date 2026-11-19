@@ -1,0 +1,630 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="3D hydrogen orbitals with spherical, planar and conical nodes shown as grey surfaces.">
+<title>Orbital Node Explorer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Deliberately single dark look: a volume viewer over a black field */
+:root{
+  --bg:#08090d; --panel:#12141b; --panel-2:#1a1d26; --line:#262a36; --line-2:#373c4b;
+  --fg:#e7eaf1; --muted:#8c92a4; --accent:#c4f23a; --accent-fg:#0d1004; --node:#b9bec9;
+  --sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{height:100%}
+body{background:var(--bg);color:var(--fg);font-family:var(--sans);font-size:14px;line-height:1.45;margin:0}
+.app{height:100dvh;min-height:560px;display:grid;grid-template-rows:auto minmax(0,1fr)}
+header{display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--line);background:var(--panel);
+  padding-block:10px;padding-left:max(14px,env(safe-area-inset-left,0px));padding-right:max(14px,env(safe-area-inset-right,0px));
+  padding-top:calc(10px + env(safe-area-inset-top,0px))}
+.menuBtn{background:var(--panel-2);border:1px solid var(--line-2);color:var(--fg);border-radius:8px;width:36px;height:34px;font-size:17px;cursor:pointer;flex:none}
+header h1{margin:0;font:700 17px/1.2 var(--sans)}
+header .sub{font:400 12.5px var(--mono);color:var(--muted)}
+.ttl{display:flex;flex-direction:column;min-width:0}
+.body{display:grid;grid-template-columns:300px minmax(0,1fr);min-height:0}
+.body.collapsed{grid-template-columns:0 minmax(0,1fr)}
+.body.collapsed .panel{display:none}
+/* ---------- panel ---------- */
+.panel{background:var(--panel);border-right:1px solid var(--line);overflow-y:auto;min-width:0;display:flex;flex-direction:column;gap:14px;
+  padding-block:14px 22px;padding-left:max(14px,env(safe-area-inset-left,0px));padding-right:14px}
+.sec{display:flex;flex-direction:column;gap:9px}
+.sec+.sec{border-top:1px solid var(--line);padding-top:13px}
+.sec>h2{margin:0;font:600 10.5px/1 var(--sans);letter-spacing:.13em;text-transform:uppercase;color:var(--muted)}
+.seg{display:grid;grid-template-columns:1fr 1fr;gap:4px;background:var(--bg);padding:3px;border-radius:9px;border:1px solid var(--line)}
+.seg button{background:none;border:0;color:var(--muted);font:600 13px var(--sans);padding:6px 4px;border-radius:7px;cursor:pointer}
+.seg button.on{background:var(--panel-2);color:var(--fg);box-shadow:0 0 0 1px var(--line-2)}
+.qn{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.qn label{display:flex;flex-direction:column;gap:3px;font:600 12px var(--mono);color:var(--muted)}
+input[type=number]{width:100%;background:var(--bg);color:var(--fg);border:1px solid var(--line-2);border-radius:7px;padding:6px 8px;font:500 14px var(--mono)}
+select{width:100%;background:var(--bg);color:var(--fg);border:1px solid var(--line-2);border-radius:7px;padding:6px 8px;font:500 13px var(--sans);cursor:pointer}
+.orbName{font:600 15px var(--mono);display:flex;justify-content:space-between;align-items:baseline}
+.orbName span:first-child{color:var(--muted);font:500 12px var(--sans)}
+.sl{display:flex;flex-direction:column;gap:3px}
+.sl .top{display:flex;justify-content:space-between;font-size:13px}
+.sl output{font:500 12px var(--mono);color:var(--muted)}
+input[type=range]{width:100%;accent-color:var(--accent);margin:0}
+.check{display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13.5px}
+.check input{accent-color:var(--accent);width:15px;height:15px;margin:0;flex:none}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.row>*{flex:1 1 auto}
+.btn{font:600 13px var(--sans);color:var(--fg);background:var(--panel-2);border:1px solid var(--line-2);border-radius:7px;padding:6px 11px;cursor:pointer;min-height:32px}
+.btn:hover{border-color:var(--muted)}
+.btn.on{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
+.btn:focus-visible,select:focus-visible,input:focus-visible,.seg button:focus-visible,.menuBtn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.mini{display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px;align-items:center}
+.mini span{font-size:13px}
+.nodeList{font:400 12px/1.5 var(--mono);color:var(--muted);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+.nodeList b{color:var(--fg);font-weight:500}
+.help{margin:0;color:var(--muted);font-size:12.5px}
+.credit{font-size:11.5px;color:var(--muted)}
+.credit a{color:var(--muted)}
+/* ---------- view ---------- */
+.view{position:relative;min-width:0;min-height:0;background:#000;overflow:hidden;touch-action:none;cursor:grab}
+.view.drag{cursor:grabbing}
+#gl{position:absolute;inset:0;width:100%;height:100%;display:block}
+.hint{position:absolute;pointer-events:none;font:400 12px var(--mono);color:var(--muted);background:rgba(18,20,27,.78);border:1px solid var(--line);border-radius:999px;padding:4px 11px;white-space:nowrap}
+.hint.tl{left:12px;top:12px}
+#gizmo{position:absolute;left:10px;top:44px;width:96px;height:96px;pointer-events:none;background:rgba(18,20,27,.55);border:1px solid var(--line);border-radius:50%}
+.hint.bl{left:12px;bottom:calc(12px + env(safe-area-inset-bottom,0px))}
+.legend{position:absolute;right:calc(12px + env(safe-area-inset-right,0px));bottom:calc(12px + env(safe-area-inset-bottom,0px));display:flex;gap:10px;align-items:center;
+  background:rgba(18,20,27,.85);border:1px solid var(--line-2);border-radius:12px;padding:9px 12px;pointer-events:none}
+.wheel{width:46px;height:46px;border-radius:50%;position:relative;flex:none}
+.wheel::after{content:"";position:absolute;inset:13px;border-radius:50%;background:var(--panel)}
+.legend .txt{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--muted)}
+.sw{display:inline-block;width:10px;height:10px;border-radius:2px;vertical-align:-1px;margin-right:5px}
+.big{position:absolute;right:calc(14px + env(safe-area-inset-right,0px));top:12px;text-align:right;pointer-events:none}
+.big .nm{font:700 26px/1.1 var(--sans)}
+.big .nm sub{font-size:.55em}
+.big .e{font:400 12px var(--mono);color:var(--muted)}
+.fallback{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:24px;text-align:center;color:var(--muted)}
+@media (max-width:860px){
+  .app{height:auto}
+  .body,.body.collapsed{grid-template-columns:minmax(0,1fr)}
+  .view{order:-1;height:68vh;min-height:400px}
+  .panel{border-right:0;border-top:1px solid var(--line);overflow:visible;padding-right:max(14px,env(safe-area-inset-right,0px))}
+  .hint.tl{display:none}
+  #gizmo{top:10px;width:84px;height:84px}
+  .legend .txt{display:none}
+  header .sub{display:none}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <button class="menuBtn" id="menuBtn" type="button" aria-label="Show or hide controls" aria-expanded="true">☰</button>
+    <div class="ttl"><h1>Orbital Node Explorer</h1><span class="sub">phase → hue · |ψ| → brightness · grey → nodes (ψ = 0) · lengths in a₀</span></div>
+  </header>
+
+  <div class="body" id="body">
+    <aside class="panel" aria-label="Controls">
+      <div class="sec">
+        <h2>Orbital</h2>
+        <div class="seg" role="group" aria-label="Orbital type">
+          <button type="button" id="mReal" class="on" aria-pressed="true">Real (cubic)</button>
+          <button type="button" id="mCplx" aria-pressed="false">Complex</button>
+        </div>
+        <select id="preset" aria-label="Preset"></select>
+        <div class="qn">
+          <label>n<input type="number" id="qN" min="1" max="8" step="1" value="2"></label>
+          <label>l<input type="number" id="qL" min="0" max="7" step="1" value="1"></label>
+          <label>m<input type="number" id="qM" min="-7" max="7" step="1" value="-1"></label>
+        </div>
+        <div class="orbName"><span>orbital</span><span id="orbTxt">2p<sub>y</sub></span></div>
+      </div>
+
+      <div class="sec">
+        <h2>Nodes</h2>
+        <label class="check"><input type="checkbox" id="nSph" checked> Spherical (radial) nodes</label>
+        <label class="check"><input type="checkbox" id="nPlane" checked> Planar nodes</label>
+        <label class="check"><input type="checkbox" id="nCone" checked> Conical nodes</label>
+        <div class="sl"><div class="top"><span>Node opacity</span><output id="nOpv">0.30</output></div>
+          <input type="range" id="nOp" min="0.05" max="0.8" step="0.01" value="0.30" aria-label="Node opacity"></div>
+        <div class="nodeList" id="nodeList"></div>
+      </div>
+
+      <div class="sec">
+        <h2>Display</h2>
+        <div class="sl"><div class="top"><span>Brightness</span><output id="brv">×1.4</output></div>
+          <input type="range" id="br" min="0.2" max="4" step="0.05" value="1.4" aria-label="Brightness"></div>
+        <div class="mini"><span>Style</span>
+          <select id="style" aria-label="Rendering style"><option value="0" selected>Section glow (high contrast)</option><option value="1">Fog (volume)</option></select></div>
+        <div class="sl" id="gammaRow"><div class="top"><span>Contrast</span><output id="gmv">1.60</output></div>
+          <input type="range" id="gm" min="0.6" max="3" step="0.05" value="1.6" aria-label="Contrast"></div>
+        <div class="sl" id="backRow"><div class="top"><span>Depth glow (half behind the cut)</span><output id="bkv">0.30</output></div>
+          <input type="range" id="bk" min="0" max="1" step="0.01" value="0.3" aria-label="Depth glow"></div>
+        <p class="help" id="glowHelp">Glow shows the cut through the nucleus that faces you, so its dark rings sit exactly on the nodes. The cut turns with the view.</p>
+        <div class="sl" id="opRow" hidden><div class="top"><span>Opacity</span><output id="opv">1.00</output></div>
+          <input type="range" id="op" min="0.05" max="2" step="0.01" value="1" aria-label="Opacity"></div>
+        <div class="mini"><span>Weight by</span>
+          <select id="weight" aria-label="Weight by"><option value="1" selected>|ψ|</option><option value="2">|ψ|²</option></select></div>
+        <div class="sl"><div class="top"><span>Lobe sharpness</span><output id="sharpv">3.0</output></div>
+          <input type="range" id="sharp" min="1" max="6" step="0.1" value="3" aria-label="Lobe sharpness"></div>
+        <div class="sl"><div class="top"><span>Hide each lobe's faint edge below</span><output id="cutv">15%</output></div>
+          <input type="range" id="cut" min="0" max="0.5" step="0.01" value="0.15" aria-label="Hide each lobe's faint edge below this fraction of that lobe's peak"></div>
+        <p class="help">Sharpness and edge cutoff are measured against each lobe's own peak, so faint outer shells stay visible. Each style starts with its own values; changing Style resets these sliders.</p>
+        <div class="mini"><span>Color wheel</span>
+          <select id="wheelSel" aria-label="Color wheel"><option value="0" selected>High contrast</option><option value="1">Hue (HSB)</option><option value="2">Sinebow</option></select></div>
+        <div class="mini"><span>Box ± w</span><input type="number" id="boxW" min="2" max="250" step="0.5" value="10" aria-label="Box half-width in Bohr radii"></div>
+        <label class="check"><input type="checkbox" id="autoBox" checked> auto box size</label>
+      </div>
+
+      <div class="sec">
+        <h2>Time evolution</h2>
+        <div class="row"><button class="btn" id="play" type="button" aria-pressed="false">▶ Play</button><button class="btn" id="resetT" type="button">Reset</button></div>
+        <div class="orbName"><span>t</span><span id="tTxt">0.0 ħ/Eₕ</span></div>
+        <div class="sl"><div class="top"><span>Speed</span><output id="spv">×1.0</output></div>
+          <input type="range" id="sp" min="-1" max="1" step="0.01" value="0" aria-label="Speed"></div>
+        <p class="help">ψ(t) = ψ · e<sup>−iEₙt/ħ</sup>: the colours turn, but |ψ| and the nodes do not move.</p>
+      </div>
+
+      <div class="sec">
+        <h2>Quality</h2>
+        <div class="mini"><span>Ray steps</span>
+          <select id="steps" aria-label="Ray steps"><option>160</option><option>240</option><option selected>320</option><option>400</option><option>480</option></select></div>
+        <div class="mini"><span>Resolution</span>
+          <select id="res" aria-label="Resolution"><option value="0.5">Low</option><option value="0.75" selected>Medium</option><option value="1">High</option></select></div>
+      </div>
+
+      <div class="sec">
+        <h2>View</h2>
+        <label class="check"><input type="checkbox" id="autorot"> auto-rotate</label>
+        <div class="row"><button class="btn" id="topView" type="button">Top view (down z)</button><button class="btn" id="resetView" type="button">Reset view</button><button class="btn" id="savePng" type="button" hidden>Save PNG</button></div>
+        <p class="credit">Based on the <a href="https://www.physics.purdue.edu/~erica/hydrogen_orbitals_3d.html" target="_blank" rel="noopener">Hydrogen Orbital Explorer</a> (Purdue Physics), with nodal surfaces added.</p>
+      </div>
+    </aside>
+
+    <main class="view" id="view" aria-label="3D view of the orbital and its nodes. Drag to orbit, scroll to zoom.">
+      <canvas id="gl"></canvas>
+      <canvas id="gizmo" width="192" height="192" aria-label="Orientation of the x, y and z axes"></canvas>
+      <div class="hint tl">hue = arg ψ · brightness ∝ |ψ|</div>
+      <div class="hint bl">drag to orbit · scroll to zoom</div>
+      <div class="big"><div class="nm" id="bigName">2p<sub>y</sub></div><div class="e" id="bigE"></div></div>
+      <div class="legend"><div class="wheel" id="wheel"></div>
+        <div class="txt"><span><span class="sw" id="swPos"></span>phase 0 · <span class="sw" id="swNeg"></span>phase π</span><span><span class="sw" style="background:var(--node)"></span>node: ψ = 0</span></div></div>
+    </main>
+  </div>
+</div>
+
+<script>
+(function(){
+"use strict";
+const ALLOW_SAVE=true;  // set to true in the stand-alone build
+const $=id=>document.getElementById(id);
+const NMAX=8, LETTER=['s','p','d','f','g','h','i','k'];
+const RN={'1,0':'p<sub>z</sub>','1,1':'p<sub>x</sub>','1,-1':'p<sub>y</sub>','2,0':'d<sub>z²</sub>','2,1':'d<sub>xz</sub>','2,-1':'d<sub>yz</sub>','2,-2':'d<sub>xy</sub>','2,2':'d<sub>x²−y²</sub>',
+  '3,0':'f<sub>z³</sub>','3,1':'f<sub>xz²</sub>','3,-1':'f<sub>yz²</sub>','3,-2':'f<sub>xyz</sub>','3,2':'f<sub>z(x²−y²)</sub>','3,3':'f<sub>x(x²−3y²)</sub>','3,-3':'f<sub>y(3x²−y²)</sub>'};
+const PRESETS=[['1s',1,0,0,1],['2s',2,0,0,1],['2px',2,1,1,1],['2py',2,1,-1,1],['2pz',2,1,0,1],['3s',3,0,0,1],['3pz',3,1,0,1],['3px',3,1,1,1],
+  ['3dz²',3,2,0,1],['3dxz',3,2,1,1],['3dyz',3,2,-1,1],['3dxy',3,2,-2,1],['3dx²−y²',3,2,2,1],['4s',4,0,0,1],['4pz',4,1,0,1],['4dz²',4,2,0,1],
+  ['4fz³',4,3,0,1],['4fxz²',4,3,1,1],['4fxyz',4,3,-2,1],['4fz(x²−y²)',4,3,2,1],['4fx(x²−3y²) · 3 planar nodes',4,3,3,1],['5g · 4 planar nodes',5,4,4,1],['6h · 5 planar nodes',6,5,5,1],['5s',5,0,0,1],['5dz²',5,2,0,1],
+  ['|2,1,+1⟩',2,1,1,0],['|3,2,+1⟩',3,2,1,0],['|3,2,+2⟩',3,2,2,0],['|4,3,+1⟩',4,3,1,0]];
+
+const S={n:2,l:1,m:-1,real:true, br:1.0,op:1,weight:2,sharp:1,cut:0,wheel:0, style:0,gamma:1.6,back:0.3, w:10,autoBox:true,
+  playing:false,t:0,phase:0,speed:1, steps:320,res:0.75, autorot:false,
+  nSph:true,nPlane:true,nCone:true,nOp:0.30};
+
+// ---------------- colour wheels (mirror the shader) ----------------
+const PAL0=[[0.72,1.0,0.16],[1.0,0.30,0.22],[0.50,0.20,1.0],[0.06,0.82,1.0]];
+const sm=f=>f*f*(3-2*f);
+function palJS(a){ a=((a%1)+1)%1;
+  if(S.wheel===1){ const h=a*6,x=1-Math.abs(h%2-1),k=Math.floor(h)%6; return [[1,x,0],[x,1,0],[0,1,x],[0,x,1],[x,0,1],[1,0,x]][k]; }
+  if(S.wheel===2){ const s=t=>Math.sin(Math.PI*t)**2; return [s(0.5-a),s(0.5-a+1/3),s(0.5-a+2/3)]; }
+  const s=a*4,i=Math.floor(s)%4,f=sm(s-Math.floor(s)),P=PAL0[i],Q=PAL0[(i+1)%4]; return P.map((v,j)=>v+(Q[j]-v)*f); }
+const css=c=>`rgb(${c.map(v=>Math.round(Math.min(1,Math.max(0,v))*255)).join(',')})`;
+function updateLegend(){ const st=[]; for(let i=0;i<=36;i++){ const a=i/36; st.push(`${css(palJS(a))} ${(a*360).toFixed(1)}deg`); }
+  $('wheel').style.background=`conic-gradient(from 90deg, ${st.join(',')})`; $('swPos').style.background=css(palJS(0)); $('swNeg').style.background=css(palJS(0.5)); }
+
+// ---------------- wave function (JS mirror) ----------------
+const fact=k=>{let r=1;for(let i=2;i<=k;i++)r*=i;return r;}, binom=(a,b)=>fact(a)/(fact(b)*fact(a-b));
+let coefs=[1],deg=0;
+function assocLeg(l,m,x){ let pmm=1; if(m>0){ const s=Math.sqrt(Math.max(0,(1-x)*(1+x))); let f=1; for(let i=1;i<=m;i++){ pmm*=f*s; f+=2; } }
+  if(l===m) return pmm; let p1=x*(2*m+1)*pmm; if(l===m+1) return p1; let pl=0;
+  for(let L2=m+2;L2<=l;L2++){ pl=(x*(2*L2-1)*p1-(L2+m-1)*pmm)/(L2-m); pmm=p1; p1=pl; } return pl; }
+function lag(rho){ let p=0,xp=1; for(let i=0;i<=deg;i++){ p+=coefs[i]*xp; xp*=rho; } return p; }
+function radialJS(r){ const rho=2*r/S.n; return Math.exp(-0.5*rho)*Math.pow(rho,S.l)*lag(rho); }
+function psi2JS(x,y,z){ const r=Math.hypot(x,y,z), ct=r>1e-9?z/r:1, am=Math.abs(S.m); let ang=1;
+  if(S.real&&am>0){ const ph=am*Math.atan2(y,x); ang=S.m>0?Math.cos(ph):Math.sin(ph); }
+  const v=radialJS(r)*assocLeg(S.l,am,ct)*ang; return v*v; }
+
+// ---------------- nodes: where ψ = 0 ----------------
+// Spherical: zeros of the Laguerre polynomial L^{2l+1}_{n-l-1}(2r/n)  → n−l−1 spheres
+// θ-nodes : zeros of P_l^{|m|}(cos θ) inside (0, π) → l−|m| cones (cos θ ≠ 0) or the plane z = 0 (cos θ = 0)
+// φ-nodes : zeros of cos(mφ) or sin(|m|φ) for real orbitals → |m| vertical planes through the z-axis
+function roots(f,a,b,N){ const out=[]; let x0=a,f0=f(a);
+  for(let i=1;i<=N;i++){ const x1=a+(b-a)*i/N, f1=f(x1);
+    if(f0===0){ out.push(x0); } else if(f0*f1<0){ let lo=x0,hi=x1,flo=f0; for(let k=0;k<60;k++){ const mid=0.5*(lo+hi),fm=f(mid); if(flo*fm<=0){hi=mid;}else{lo=mid;flo=fm;} } out.push(0.5*(lo+hi)); }
+    x0=x1; f0=f1; } return out; }
+let NODES={sph:[],cos:[],phi:[]};
+function computeNodes(){
+  const sph=deg>0 ? roots(lag,1e-6,4*S.n+8*deg+20,20000).map(rho=>rho*S.n/2) : [];
+  const am=Math.abs(S.m);
+  // polynomial part of P_l^m (drop the sin^m θ factor, which is only zero on the z-axis)
+  const cos = (S.l-am)>0 ? roots(x=>assocLeg(S.l,am,x)/Math.pow(Math.max(1e-300,1-x*x),am/2),-1+1e-9,1-1e-9,20000) : [];
+  const cosC=cos.map(c=>Math.abs(c)<1e-7?0:c);
+  let phi=[];
+  if(S.real && am>0){ for(let k=0;k<am;k++) phi.push(S.m>0 ? (2*k+1)*Math.PI/(2*am) : k*Math.PI/am); }
+  NODES={sph,cos:cosC,phi};
+}
+function nodeText(){
+  const f=v=>v.toFixed(2); const dg=v=>(v*180/Math.PI).toFixed(1)+'°';
+  const parts=[];
+  parts.push(`<b>Spherical</b> (${NODES.sph.length}): ${NODES.sph.length?NODES.sph.map(r=>'r = '+f(r)+' a₀').join(', '):'none'}`);
+  const planes=[]; if(NODES.cos.some(c=>c===0)) planes.push('xy-plane (z = 0)');
+  NODES.phi.forEach(p=>{ const d=p*180/Math.PI; planes.push(Math.abs(d)<1e-6?'xz-plane (φ = 0°)':(Math.abs(d-90)<1e-6?'yz-plane (φ = 90°)':`vertical plane φ = ${dg(p)}`)); });
+  parts.push(`<b>Planar</b> (${planes.length}): ${planes.length?planes.join(', '):'none'}`);
+  const cones=NODES.cos.filter(c=>c!==0).map(c=>'θ = '+dg(Math.acos(c)));
+  parts.push(`<b>Conical</b> (${cones.length}): ${cones.length?cones.join(', '):'none'}`);
+  const total=NODES.sph.length+planes.length+cones.length;
+  let tail=`<b>Total</b> ${total}`;
+  if(S.real) tail+=` = n − 1`;
+  else if(S.m!==0) tail+=` · the z-axis is also a nodal <i>line</i> (m ≠ 0), and complex states with m ≠ 0 have no φ-planes`;
+  parts.push(tail);
+  $('nodeList').innerHTML=parts.join('<br>');
+}
+
+let rVis=8, ampScale=1, w=10, shellMax=new Array(8).fill(1), angMax=1, projNorm=1, autoExpo=3, autoExpoF=3, lastMx=1, needExpo=false;
+const smoothstep=(a,b,x)=>{ const t=Math.min(1,Math.max(0,(x-a)/(b-a))); return t*t*(3-2*t); };
+function weightJS(x,y,z,mx){ // same weight the shader gives a sample
+  const r=Math.hypot(x,y,z), ct=r>1e-9?z/r:1, am=Math.abs(S.m), R=radialJS(r), P=assocLeg(S.l,am,ct);
+  let ang=1; if(S.real&&am>0){ const ph=am*Math.atan2(y,x); ang=S.m>0?Math.cos(ph):Math.sin(ph); }
+  const a2=(R*P*ang)**2/mx; let k=0; for(const s of NODES.sph) if(r>s) k++;
+  const rel=Math.min(1,Math.abs(R)/shellMax[Math.min(k,7)]*Math.abs(P)*Math.abs(ang)/angMax);
+  return Math.pow(a2,0.5*S.weight)*Math.pow(Math.max(rel,1e-6),S.sharp-1)*(S.cut>0?smoothstep(S.cut,S.cut+0.1,rel):1);
+}
+// glow exposure: integrate the weight along lines of sight (z and x), normalise the brightest line to 1,
+// and set the exposure so a typical line through the orbital lands in the mid-tones
+function computeExposure(){
+  const mx=lastMx, Rn=24, ST=96, vals=[]; let pmax=1e-30; const dt=2*w/ST;
+  for(const ax of [2,0]) for(let i=0;i<Rn;i++) for(let j=0;j<Rn;j++){
+    const a=-w+2*w*(i+.5)/Rn, b=-w+2*w*(j+.5)/Rn; let s=0;
+    for(let q=0;q<ST;q++){ const c=-w+dt*(q+.5); s+= ax===2?weightJS(a,b,c,mx):weightJS(c,a,b,mx); }
+    s*=dt; vals.push(s); if(s>pmax) pmax=s; }
+  projNorm=1/pmax;
+  const nz=vals.map(v=>v/pmax).filter(v=>v>0.03).sort((x,y)=>x-y);
+  const p50=nz.length?nz[Math.floor(nz.length*0.5)]:0.2;
+  autoExpo=Math.min(40,Math.max(1.2,1.1/p50));
+  // exposure for the cut itself, from the weight on the three central planes
+  const fv=[]; const G=48; for(let i=0;i<G;i++) for(let j=0;j<G;j++){ const a=-w+2*w*(i+.5)/G, b=-w+2*w*(j+.5)/G;
+    fv.push(weightJS(a,b,0,mx),weightJS(a,0,b,mx),weightJS(0,a,b,mx)); }
+  const fz=fv.filter(v=>v>2e-3).sort((x,y)=>x-y); const f50=fz.length?fz[Math.floor(fz.length*0.5)]:0.1;
+  autoExpoF=Math.min(400,Math.max(1.2,0.9/f50)); needExpo=false;
+}
+function prepare(){
+  const k=S.n-S.l-1; deg=k; coefs=[]; for(let i=0;i<=k;i++) coefs.push(((i%2)?-1:1)*binom(k+2*S.l+1,k-i)/fact(i));
+  if(S.autoBox){ const rmax=8*S.n*S.n+25,N=3000; let tot=0; const cum=new Float64Array(N+1);
+    for(let i=1;i<=N;i++){ const r=rmax*i/N,R=radialJS(r); tot+=R*R*r*r; cum[i]=tot; }
+    let r99=rmax; for(let i=1;i<=N;i++) if(cum[i]>=0.995*tot){ r99=rmax*i/N; break; }
+    S.w=Math.round(Math.max(3,r99*0.95)*2)/2; $('boxW').value=S.w; }
+  w=S.w;
+  let mx=1e-300; const G=44;
+  for(let i=0;i<G;i++)for(let j=0;j<G;j++)for(let q=0;q<G;q++){ const v=psi2JS(-w+2*w*(i+.5)/G,-w+2*w*(j+.5)/G,-w+2*w*(q+.5)/G); if(v>mx) mx=v; }
+  for(let i=0;i<=600;i++){ const r=w*1.73*i/600; for(const d of [[0,0,1],[0,0,-1],[1,0,0],[0,1,0],[.7071,.7071,0],[.7071,0,.7071],[0,.7071,.7071],[.5774,.5774,.5774],[.7071,-.7071,0]]){ const v=psi2JS(d[0]*r,d[1]*r,d[2]*r); if(v>mx) mx=v; } }
+  ampScale=1/Math.sqrt(mx);
+  computeNodes();
+  // peak |R(r)| inside each radial shell (between spherical nodes) and peak of the angular part,
+  // so sharpening is judged against each lobe's own peak, not the global maximum
+  shellMax=new Array(8).fill(1e-30); const rEnd=1.8*w, NR=6000;
+  for(let i=1;i<=NR;i++){ const r=rEnd*i/NR; let k=0; for(const s of NODES.sph) if(r>s) k++; if(k<8) shellMax[k]=Math.max(shellMax[k],Math.abs(radialJS(r))); }
+  const am=Math.abs(S.m); angMax=1e-30; for(let i=0;i<=4000;i++){ angMax=Math.max(angMax,Math.abs(assocLeg(S.l,am,-1+2*i/4000))); }
+  // nodes are drawn only out to the radius holding 97% of the radial probability (a little past the last lobe)
+  { const rmax=8*S.n*S.n+25,N=3000; let tot=0; const cum=new Float64Array(N+1);
+    for(let i=1;i<=N;i++){ const r=rmax*i/N,R=radialJS(r); tot+=R*R*r*r; cum[i]=tot; }
+    let r97=rmax; for(let i=1;i<=N;i++) if(cum[i]>=0.97*tot){ r97=rmax*i/N; break; }
+    const lastNode=NODES.sph.length?NODES.sph[NODES.sph.length-1]:0;
+    rVis=Math.min(w*1.7, Math.max(r97*1.05, lastNode*1.25+1.5)); }
+  lastMx=mx; computeExposure();
+}
+
+// ---------------- WebGL ----------------
+const view=$('view'), cv=$('gl');
+const gl=cv.getContext('webgl2',{antialias:false,alpha:false,preserveDrawingBuffer:false});
+const fail=m=>view.insertAdjacentHTML('beforeend',`<div class="fallback">${m}</div>`);
+if(!gl) fail('This viewer needs WebGL 2. Try a recent Chrome, Edge, Firefox or Safari.');
+const VS=`#version 300 es
+in vec2 aPos; void main(){ gl_Position=vec4(aPos,0.0,1.0); }`;
+const FS=`#version 300 es
+precision highp float; precision highp int;
+out vec4 outColor;
+uniform vec2 uRes; uniform vec3 uCamPos,uFwd,uRight,uUp; uniform float uTanFov;
+uniform float uW,uN; uniform int uLq,uM,uDeg; uniform bool uReal;
+uniform float uCoef[8]; uniform float uAmp,uPhase;
+uniform int uWheel; uniform float uBright,uOpac,uExp,uCut,uSharp; uniform int uSteps;
+uniform float uShellMax[8]; uniform float uAngMax;
+uniform int uNS; uniform float uSph[8];      // spherical node radii
+uniform int uNC; uniform float uCos[8];      // cos θ of θ-nodes (0 → plane z = 0)
+uniform int uNP; uniform float uPhi[8];      // φ of vertical nodal planes
+uniform bool uShowS,uShowP,uShowC; uniform float uNodeOp;
+uniform int uStyle; uniform float uExpo,uGamma,uProj,uExpoF,uBack; uniform bool uFaceOnNode; uniform float uPix; uniform float uRvis;   // uRvis: radius where nodes stop   // uPix: world size of one pixel at the cut   // style 0 = section glow, 1 = fog
+
+vec2 cmul(vec2 a,vec2 b){ return vec2(a.x*b.x-a.y*b.y, a.x*b.y+a.y*b.x); }
+float assocLeg(int l,int m,float x){
+  float pmm=1.0;
+  if(m>0){ float s=sqrt(max(0.0,(1.0-x)*(1.0+x))); float f=1.0; for(int i=1;i<=8;i++){ if(i>m) break; pmm*=f*s; f+=2.0; } }
+  if(l==m) return pmm;
+  float p1=x*float(2*m+1)*pmm; if(l==m+1) return p1;
+  float pl=0.0;
+  for(int k=2;k<=9;k++){ int L2=m+k; if(L2>l) break; pl=(x*float(2*L2-1)*p1-float(L2+m-1)*pmm)/float(L2-m); pmm=p1; p1=pl; }
+  return pl;
+}
+vec2 psi(vec3 p, out float rel){
+  float r=length(p), rho=2.0*r/uN;
+  float poly=0.0,xp=1.0; for(int i=0;i<8;i++){ if(i>uDeg) break; poly+=uCoef[i]*xp; xp*=rho; }
+  float rl=1.0; for(int i=0;i<8;i++){ if(i>=uLq) break; rl*=rho; }
+  float rad=exp(-0.5*rho)*rl*poly;
+  float ct=r>1e-6?p.z/r:1.0; int am=abs(uM);
+  float P=assocLeg(uLq,am,ct);
+  vec2 ang=vec2(1.0,0.0);
+  if(am>0){ float ph=(abs(p.x)+abs(p.y)>1e-9)?float(am)*atan(p.y,p.x):0.0;
+    if(uReal) ang=vec2(uM>0?cos(ph):sin(ph),0.0); else ang=vec2(cos(ph),(uM<0?-1.0:1.0)*sin(ph)); }
+  int sh=0; for(int i=0;i<8;i++){ if(i<uNS && r>uSph[i]) sh++; }
+  float smx=uShellMax[0]; for(int i=1;i<8;i++){ if(i==sh) smx=uShellMax[i]; }
+  rel=clamp(abs(rad)/smx*abs(P)*length(ang)/uAngMax,0.0,1.0);   // 1 at the peak of this lobe / shell
+  return cmul(rad*P*uAmp*ang, vec2(cos(uPhase),sin(uPhase)));
+}
+float argPsi(vec2 v){ // robust arg ψ: some GPUs return 0 for atan(0, negative)
+  if(abs(v.y)<=1e-6*abs(v.x)) return v.x<0.0 ? 3.14159265 : 0.0;
+  return atan(v.y,v.x);
+}
+float sm(float f){ return f*f*(3.0-2.0*f); }
+vec3 pal(float a){
+  if(uWheel==1) return clamp(abs(mod(a*6.0+vec3(0.0,4.0,2.0),6.0)-3.0)-1.0,0.0,1.0);
+  if(uWheel==2){ vec3 t=vec3(0.5-a,0.5-a+1.0/3.0,0.5-a+2.0/3.0); vec3 s=sin(3.14159265*t); return s*s; }
+  vec3 c0=vec3(0.72,1.0,0.16),c1=vec3(1.0,0.30,0.22),c2=vec3(0.50,0.20,1.0),c3=vec3(0.06,0.82,1.0);
+  float s=a*4.0; int i=int(floor(s)); float f=sm(fract(s));
+  if(i==0) return mix(c0,c1,f); if(i==1) return mix(c1,c2,f); if(i==2) return mix(c2,c3,f); return mix(c3,c0,f);
+}
+// signed "distance-like" functions of the node surfaces; a sign change between two samples = crossing
+float fS(int i,vec3 p){ return length(p)-uSph[i]; }
+float fC(int i,vec3 p){ return uCos[i]==0.0 ? p.z : p.z-uCos[i]*length(p); }
+float fP(int i,vec3 p){ return -sin(uPhi[i])*p.x+cos(uPhi[i])*p.y; }
+vec3 nS(vec3 p){ return normalize(p); }
+vec3 nC(int i,vec3 p){ return uCos[i]==0.0 ? vec3(0,0,1) : normalize(vec3(0,0,1)-uCos[i]*p/max(length(p),1e-6)); }
+vec3 nP(int i){ return vec3(-sin(uPhi[i]),cos(uPhi[i]),0.0); }
+float nodeFade(vec3 p){ return 1.0-smoothstep(0.86*uRvis,uRvis,length(p)); }   // nodes end where the orbital ends
+void shadeNode(vec3 nrm, vec3 rd, float fade, float specK, inout vec3 col, inout float T){
+  if(fade<=0.0) return;
+  vec3 n=nrm*sign(dot(nrm,-rd));                       // two-sided: always face the viewer
+  float c=max(dot(n,-rd),0.0);
+  vec3 L=normalize(-rd*0.55-uRight*0.45+uUp*0.6);      // light from the upper left, fixed to the view
+  float dif=max(dot(n,L),0.0);
+  float spec=specK*pow(max(dot(n,normalize(L-rd)),0.0),40.0);   // full highlight on spheres, soft on cones/planes
+  float fres=pow(1.0-c,2.0);
+  vec3 g=vec3(0.72,0.74,0.79)*(0.18+0.82*dif)+vec3(1.0)*spec;      // light-to-shadow shading + a highlight → reads as 3D
+  float a=clamp(uNodeOp*fade*(0.45+0.55*fres)*(0.55+0.9*dif)+0.6*spec*fade*min(1.0,uNodeOp*3.0),0.0,0.95);
+  col+=T*a*g; T*=1.0-a;
+}
+float hash(vec2 p){ return fract(sin(dot(p,vec2(12.9898,78.233)))*43758.5453); }
+void main(){
+  vec2 ndc=(gl_FragCoord.xy/uRes)*2.0-1.0;
+  vec3 rd=normalize(uFwd+ndc.x*uTanFov*(uRes.x/uRes.y)*uRight+ndc.y*uTanFov*uUp);
+  vec3 ro=uCamPos;
+  vec3 inv=1.0/rd, t0=(-vec3(uW)-ro)*inv, t1=(vec3(uW)-ro)*inv, tmn=min(t0,t1), tmx=max(t0,t1);
+  float tn=max(max(tmn.x,tmn.y),max(tmn.z,0.0)), tf=min(min(tmx.x,tmx.y),tmx.z);
+  vec3 col=vec3(0.0); float T=1.0;
+  float Ia=0.0, Wh=0.0; vec3 Ch=vec3(0.0);   // depth glow: density and weighted colour
+  // Section glow: the cut through the nucleus that faces the viewer is drawn exactly (its dark rings ARE the nodes);
+  // only the half behind it adds a faint depth glow. Node surfaces are drawn whole, in front of and behind the cut.
+  float sup=1.0, tp=1e9, faceA=0.0; vec3 faceC=vec3(0.0); bool hasFace=false;
+  if(uStyle==0 && tf>tn){
+    tp=dot(-ro,uFwd)/dot(rd,uFwd);
+    if(tp>tn && tp<tf){ hasFace=true;
+      float relF; vec3 pf=ro+rd*tp; vec2 vf=psi(pf,relF); float af2=dot(vf,vf);
+      if(!uFaceOnNode) sup=smoothstep(0.0,0.2,relF);   // keep the cut's nodes black: no depth glow right at them
+      if(af2>1e-12){ float wf=pow(af2,0.5*uExp)*pow(max(relF,1e-6),uSharp-1.0)*(uCut>0.0?smoothstep(uCut,uCut+0.1,relF):1.0);
+        float aF=pow(1.0-exp(-uBright*uExpoF*wf),uGamma);
+        faceC=pal(fract(argPsi(vf)/6.2831853+1.0))*aF; faceA=0.92*aF; }
+      // where a node surface meets the cut, a thin grey line marks it exactly (only out to where the orbital ends)
+      float lw=1.6*uPix, line=0.0, rf=length(pf);
+      for(int i=0;i<8;i++){
+        if(uShowS && i<uNS) line=max(line,1.0-smoothstep(0.0,lw,abs(rf-uSph[i])));
+        if(i<uNC){ bool sh=(uCos[i]==0.0)?uShowP:uShowC; if(sh){ float g=uCos[i]==0.0?abs(pf.z):abs(pf.z-uCos[i]*rf)/max(length(vec3(0,0,1)-uCos[i]*pf/max(rf,1e-6)),1e-3); line=max(line,1.0-smoothstep(0.0,lw,g)); } }
+        if(uShowP && i<uNP) line=max(line,1.0-smoothstep(0.0,lw,abs(fP(i,pf))));
+      }
+      line*=nodeFade(pf);
+      if(!uFaceOnNode && line>0.0){ float la=line*min(1.0,uNodeOp*2.2); faceC=faceC*(1.0-la)+vec3(0.74,0.76,0.81)*la; faceA=1.0-(1.0-faceA)*(1.0-0.6*la); }
+    }
+  }
+  if(tf>tn){
+    float dt=3.4641*uW/float(uSteps);
+    float t=tn+dt*hash(gl_FragCoord.xy);
+    float k=uOpac*6.0*dt/uW;
+    vec3 p=ro+rd*t;
+    float pS[8],pC[8],pP[8];
+    for(int i=0;i<8;i++){ pS[i]=i<uNS?fS(i,p):0.0; pC[i]=i<uNC?fC(i,p):0.0; pP[i]=i<uNP?fP(i,p):0.0; }
+    bool faceDone=!hasFace;
+    for(int it=0;it<1400;it++){
+      if(t>tf||T<0.006) break;
+      p=ro+rd*t;
+      // node surfaces crossed since the previous sample
+      for(int i=0;i<8;i++){
+        if(i<uNS){ float f=fS(i,p); if(uShowS && f*pS[i]<0.0){ float s=pS[i]/(pS[i]-f); vec3 q=p-rd*dt*(1.0-s); shadeNode(nS(q),rd,nodeFade(q),1.0,col,T);} pS[i]=f; }
+        if(i<uNC){ float f=fC(i,p); bool show=(uCos[i]==0.0)?uShowP:uShowC; if(show && f*pC[i]<0.0){ float s=pC[i]/(pC[i]-f); vec3 q=p-rd*dt*(1.0-s); shadeNode(nC(i,q),rd,nodeFade(q),0.2,col,T);} pC[i]=f; }
+        if(i<uNP){ float f=fP(i,p); if(uShowP && f*pP[i]<0.0){ float s=pP[i]/(pP[i]-f); vec3 q=p-rd*dt*(1.0-s); shadeNode(nP(i),rd,nodeFade(q),0.2,col,T);} pP[i]=f; }
+      }
+      if(!faceDone && t>=tp){ col+=T*faceC; T*=1.0-faceA; faceDone=true; }
+      if(uStyle==0 && t<tp){ t+=dt; continue; }        // the half in front of the cut has no glow
+      float rel; vec2 v=psi(p,rel); float a2=dot(v,v);
+      if(a2>1e-8){
+        float wv=pow(a2,0.5*uExp);
+        // sharpen each lobe relative to its own peak, so faint outer shells keep their shape
+        wv*=pow(max(rel,1e-6),uSharp-1.0)*(uCut>0.0?smoothstep(uCut,uCut+0.1,rel):1.0);
+        if(uStyle==0){
+          Ia+=T*wv*dt; float h=T*wv*wv; Ch+=h*pal(fract(argPsi(v)/6.2831853+1.0)); Wh+=h;
+        } else {
+          float al=1.0-exp(-k*wv);
+          col+=T*al*pal(fract(argPsi(v)/6.2831853+1.0))*uBright;
+          T*=1.0-al;
+        }
+      }
+      t+=dt;
+    }
+    if(!faceDone){ col+=T*faceC; T*=1.0-faceA; }
+  }
+  if(uStyle==0 && Wh>0.0){
+    // faint depth glow from the half behind the cut: no cancellation darkening, so it cannot draw rings of its own
+    vec3 hc=Ch/Wh;
+    float v=1.0-exp(-uBright*uExpo*uProj*Ia);
+    col+=hc*pow(v,uGamma)*(uFaceOnNode?max(uBack,0.85):uBack)*sup;
+  }
+  float m=max(col.r,max(col.g,col.b)); if(m>1.0) col/=m;
+  outColor=vec4(col,1.0);
+}`;
+let prog=null; const U={};
+if(gl){
+  const sh=(t,s)=>{ const x=gl.createShader(t); gl.shaderSource(x,s); gl.compileShader(x); if(!gl.getShaderParameter(x,gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(x)); return x; };
+  try{ prog=gl.createProgram(); gl.attachShader(prog,sh(gl.VERTEX_SHADER,VS)); gl.attachShader(prog,sh(gl.FRAGMENT_SHADER,FS)); gl.linkProgram(prog);
+    if(!gl.getProgramParameter(prog,gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog)); }
+  catch(e){ console.error(e); prog=null; fail('The 3D view could not start on this device.'); }
+  if(prog){ gl.useProgram(prog);
+    const b=gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER,b); gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,3,-1,-1,3]),gl.STATIC_DRAW);
+    const loc=gl.getAttribLocation(prog,'aPos'); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc,2,gl.FLOAT,false,0,0);
+    ['uRes','uCamPos','uFwd','uRight','uUp','uTanFov','uW','uN','uLq','uM','uDeg','uReal','uCoef','uAmp','uPhase','uWheel','uBright','uOpac','uExp','uCut','uSharp','uShellMax','uAngMax','uSteps',
+     'uNS','uSph','uNC','uCos','uNP','uPhi','uShowS','uShowP','uShowC','uNodeOp','uStyle','uExpo','uGamma','uProj','uExpoF','uBack','uFaceOnNode','uPix','uRvis'].forEach(n=>U[n]=gl.getUniformLocation(prog,n)); }
+}
+
+// ---------------- camera (free trackball) ----------------
+const FOV=32*Math.PI/180, TAN=Math.tan(FOV/2);
+const cam={zoom:1};
+function frameFromAngles(az,el){ const ce=Math.cos(el), f=[-ce*Math.cos(az),-ce*Math.sin(az),-Math.sin(el)];
+  let r=[f[1],-f[0],0]; const rl=Math.hypot(r[0],r[1])||1; r=[r[0]/rl,r[1]/rl,0];
+  return {r,u:[r[1]*f[2]-r[2]*f[1],r[2]*f[0]-r[0]*f[2],r[0]*f[1]-r[1]*f[0]],f}; }
+function resetCam(){ Object.assign(cam,frameFromAngles(-Math.PI/2+0.62,0.36)); cam.zoom=1; }
+resetCam();
+const norm=v=>{ const l=Math.hypot(v[0],v[1],v[2])||1; return [v[0]/l,v[1]/l,v[2]/l]; };
+const cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
+function rotVec(v,n,c,s){ const d=v[0]*n[0]+v[1]*n[1]+v[2]*n[2], x=cross(n,v); return [0,1,2].map(i=>v[i]*c+x[i]*s+n[i]*d*(1-c)); }
+function turn(n,a){ const c=Math.cos(a),s=Math.sin(a); const f=norm(rotVec(cam.f,n,c,s)); let u=rotVec(cam.u,n,c,s); const r=norm(cross(f,u)); u=cross(r,f); cam.r=r; cam.u=u; cam.f=f; }
+function orbit(dx,dy){ const len=Math.hypot(dx,dy); if(!len) return; turn(norm([0,1,2].map(i=>cam.u[i]*dx+cam.r[i]*dy)),-len*0.008); }
+function basis(){ const asp=view.clientWidth/Math.max(1,view.clientHeight), d=4.2*w/(cam.zoom*Math.min(1,asp)); return {pos:cam.f.map(v=>-v*d),f:cam.f,r:cam.r,u:cam.u}; }
+
+// ---------------- render ----------------
+let dirty=true;
+function resize(){ const W=view.clientWidth,H=view.clientHeight; if(!W||!H) return; const dpr=Math.min(window.devicePixelRatio||1,1.5);
+  cv.width=Math.max(1,Math.round(W*S.res*dpr)); cv.height=Math.max(1,Math.round(H*S.res*dpr)); dirty=true; }
+new ResizeObserver(resize).observe(view);
+const f8=a=>{ const o=new Float32Array(8); a.slice(0,8).forEach((v,i)=>o[i]=v); return o; };
+// small orientation widget: shows where x, y, z point; it turns with the view
+const gz=$('gizmo'), gx=gz.getContext('2d');
+function drawGizmo(b){
+  const W=gz.width, c=W/2, R=W*0.33;
+  gx.clearRect(0,0,W,W);
+  const ax=[['x',[1,0,0],'#ff6b5b'],['y',[0,1,0],'#6fe07c'],['z',[0,0,1],'#5fb0ff']];
+  const pr=ax.map(([n,v,col])=>({n,col,x:v[0]*b.r[0]+v[1]*b.r[1]+v[2]*b.r[2],y:v[0]*b.u[0]+v[1]*b.u[1]+v[2]*b.u[2],d:v[0]*b.f[0]+v[1]*b.f[1]+v[2]*b.f[2]}));
+  pr.sort((a,b2)=>b2.d-a.d); // far axes first, near axes on top
+  gx.font=`600 ${W*0.13}px "IBM Plex Sans", system-ui, sans-serif`; gx.textAlign='center'; gx.textBaseline='middle'; gx.lineCap='round';
+  for(const a of pr){
+    const ex=c+a.x*R, ey=c-a.y*R, away=a.d>0;           // pointing into the screen → dimmer
+    gx.globalAlpha=away?0.45:1;
+    gx.strokeStyle=a.col; gx.lineWidth=W*0.03; gx.beginPath(); gx.moveTo(c,c); gx.lineTo(ex,ey); gx.stroke();
+    gx.fillStyle=a.col; gx.beginPath(); gx.arc(ex,ey,W*0.035,0,Math.PI*2); gx.fill();
+    gx.fillText(a.n,c+a.x*R*1.32,c-a.y*R*1.32);
+  }
+  gx.globalAlpha=1; gx.fillStyle='#8c92a4'; gx.beginPath(); gx.arc(c,c,W*0.022,0,Math.PI*2); gx.fill();
+}
+function draw(){
+  const b=basis(); drawGizmo(b);
+  if(!prog) return;
+  gl.viewport(0,0,cv.width,cv.height); gl.uniform2f(U.uRes,cv.width,cv.height);
+  gl.uniform3fv(U.uCamPos,b.pos); gl.uniform3fv(U.uFwd,b.f); gl.uniform3fv(U.uRight,b.r); gl.uniform3fv(U.uUp,b.u); gl.uniform1f(U.uTanFov,TAN);
+  gl.uniform1f(U.uW,w); gl.uniform1f(U.uN,S.n); gl.uniform1i(U.uLq,S.l); gl.uniform1i(U.uM,S.m); gl.uniform1i(U.uDeg,deg); gl.uniform1i(U.uReal,S.real?1:0);
+  gl.uniform1fv(U.uCoef,f8(coefs)); gl.uniform1f(U.uAmp,ampScale); gl.uniform1f(U.uPhase,S.phase);
+  gl.uniform1i(U.uWheel,S.wheel); gl.uniform1f(U.uBright,S.br); gl.uniform1f(U.uOpac,S.op); gl.uniform1f(U.uExp,S.weight); gl.uniform1f(U.uCut,S.cut); gl.uniform1f(U.uSharp,S.sharp); gl.uniform1fv(U.uShellMax,f8(shellMax)); gl.uniform1f(U.uAngMax,angMax); gl.uniform1i(U.uSteps,S.steps);
+  gl.uniform1i(U.uNS,NODES.sph.length); gl.uniform1fv(U.uSph,f8(NODES.sph));
+  gl.uniform1i(U.uNC,NODES.cos.length); gl.uniform1fv(U.uCos,f8(NODES.cos));
+  gl.uniform1i(U.uNP,NODES.phi.length); gl.uniform1fv(U.uPhi,f8(NODES.phi));
+  gl.uniform1i(U.uShowS,S.nSph?1:0); gl.uniform1i(U.uShowP,S.nPlane?1:0); gl.uniform1i(U.uShowC,S.nCone?1:0); gl.uniform1f(U.uNodeOp,S.nOp);
+  gl.uniform1i(U.uStyle,S.style); gl.uniform1f(U.uExpo,autoExpo); gl.uniform1f(U.uGamma,S.gamma); gl.uniform1f(U.uProj,projNorm); gl.uniform1f(U.uExpoF,autoExpoF); gl.uniform1f(U.uBack,S.back);
+  // is the cut (plane through the nucleus facing the viewer) lying on a nodal plane? then let the depth glow through everywhere
+  let onNode=false; const f=b.f;
+  if(NODES.cos.some(c=>c===0) && Math.abs(f[2])>0.985) onNode=true;
+  for(const ph of NODES.phi){ if(Math.abs(-Math.sin(ph)*f[0]+Math.cos(ph)*f[1])>0.985) onNode=true; }
+  gl.uniform1i(U.uFaceOnNode,onNode?1:0); gl.uniform1f(U.uRvis,rVis);
+  { const asp=view.clientWidth/Math.max(1,view.clientHeight), d=4.2*w/(cam.zoom*Math.min(1,asp)); gl.uniform1f(U.uPix,2*d*TAN/cv.height); }
+  gl.drawArrays(gl.TRIANGLES,0,3);
+}
+
+// ---------------- UI ----------------
+function nameHTML(){ if(!S.real) return `|${S.n}, ${S.l}, ${S.m>0?'+':''}${S.m}⟩`; if(S.l===0) return `${S.n}s`; const k=`${S.l},${S.m}`;
+  return RN[k]?`${S.n}${RN[k]}`:`${S.n}${LETTER[S.l]}<sub>m=${S.m}</sub>`; }
+function buildPresets(){ $('preset').innerHTML='<option value="">— choose —</option>'+PRESETS.map((p,i)=>`<option value="${i}">${p[0]}${p[4]?'':' (complex)'}</option>`).join(''); }
+function sync(){
+  $('qN').value=S.n; $('qL').value=S.l; $('qL').max=S.n-1; $('qM').value=S.m; $('qM').min=-S.l; $('qM').max=S.l;
+  $('orbTxt').innerHTML=nameHTML(); $('bigName').innerHTML=nameHTML();
+  $('bigE').textContent=`Eₙ = −13.6 eV / n² = ${(-13.6057/(S.n*S.n)).toFixed(3)} eV`;
+  $('mReal').classList.toggle('on',S.real); $('mReal').setAttribute('aria-pressed',S.real);
+  $('mCplx').classList.toggle('on',!S.real); $('mCplx').setAttribute('aria-pressed',!S.real);
+  nodeText();
+}
+function changed(){ prepare(); sync(); dirty=true; }
+function clamp(){ S.n=Math.max(1,Math.min(NMAX,Math.round(S.n)||1)); S.l=Math.max(0,Math.min(S.n-1,Math.round(S.l)||0)); S.m=Math.max(-S.l,Math.min(S.l,Math.round(S.m)||0)); }
+$('menuBtn').addEventListener('click',()=>{ const b=$('body'); b.classList.toggle('collapsed'); $('menuBtn').setAttribute('aria-expanded',!b.classList.contains('collapsed')); });
+$('mReal').addEventListener('click',()=>{ S.real=true; changed(); });
+$('mCplx').addEventListener('click',()=>{ S.real=false; changed(); });
+$('preset').addEventListener('change',e=>{ const p=PRESETS[+e.target.value]; if(!p) return; S.n=p[1]; S.l=p[2]; S.m=p[3]; S.real=!!p[4]; changed(); });
+[['qN','n'],['qL','l'],['qM','m']].forEach(([id,k])=>$(id).addEventListener('change',e=>{ S[k]=+e.target.value; clamp(); $('preset').value=''; changed(); }));
+['nSph','nPlane','nCone'].forEach(id=>$(id).addEventListener('change',e=>{ S[id]=e.target.checked; dirty=true; }));
+$('nOp').addEventListener('input',e=>{ S.nOp=+e.target.value; $('nOpv').textContent=S.nOp.toFixed(2); dirty=true; });
+$('br').addEventListener('input',e=>{ S.br=+e.target.value; $('brv').textContent='×'+S.br.toFixed(1); dirty=true; });
+$('op').addEventListener('input',e=>{ S.op=+e.target.value; $('opv').textContent=S.op.toFixed(2); dirty=true; });
+$('weight').addEventListener('change',e=>{ S.weight=+e.target.value; needExpo=true; dirty=true; });
+$('sharp').addEventListener('input',e=>{ S.sharp=+e.target.value; $('sharpv').textContent=S.sharp.toFixed(1); needExpo=true; dirty=true; });
+$('cut').addEventListener('input',e=>{ S.cut=+e.target.value; $('cutv').textContent=Math.round(S.cut*100)+'%'; needExpo=true; dirty=true; });
+$('wheelSel').addEventListener('change',e=>{ S.wheel=+e.target.value; updateLegend(); dirty=true; });
+const STYLE_START={0:{br:1.0,weight:2,sharp:1,cut:0},1:{br:1.4,weight:1,sharp:3,cut:0.15}};
+function applyStyleStart(){ const d=STYLE_START[S.style]; Object.assign(S,d);
+  $('br').value=S.br; $('brv').textContent='×'+S.br.toFixed(1); $('weight').value=String(S.weight);
+  $('sharp').value=S.sharp; $('sharpv').textContent=S.sharp.toFixed(1); $('cut').value=S.cut; $('cutv').textContent=Math.round(S.cut*100)+'%';
+  $('gammaRow').hidden=S.style!==0; $('backRow').hidden=S.style!==0; $('glowHelp').hidden=S.style!==0; $('opRow').hidden=S.style!==1; }
+$('style').addEventListener('change',e=>{ S.style=+e.target.value; applyStyleStart(); needExpo=true; dirty=true; });
+$('gm').addEventListener('input',e=>{ S.gamma=+e.target.value; $('gmv').textContent=S.gamma.toFixed(2); dirty=true; });
+$('bk').addEventListener('input',e=>{ S.back=+e.target.value; $('bkv').textContent=S.back.toFixed(2); dirty=true; });
+$('boxW').addEventListener('change',e=>{ S.w=Math.max(2,Math.min(250,+e.target.value||10)); S.autoBox=false; $('autoBox').checked=false; changed(); });
+$('autoBox').addEventListener('change',e=>{ S.autoBox=e.target.checked; changed(); });
+function setPlay(p){ S.playing=p; $('play').textContent=p?'❚❚ Pause':'▶ Play'; $('play').classList.toggle('on',p); $('play').setAttribute('aria-pressed',p); last=null; }
+$('play').addEventListener('click',()=>setPlay(!S.playing));
+$('resetT').addEventListener('click',()=>{ S.t=0; S.phase=0; dirty=true; });
+$('sp').addEventListener('input',e=>{ S.speed=Math.pow(10,+e.target.value); $('spv').textContent='×'+(S.speed>=1?S.speed.toFixed(1):S.speed.toFixed(2)); });
+$('steps').addEventListener('change',e=>{ S.steps=+e.target.value; dirty=true; });
+$('res').addEventListener('change',e=>{ S.res=+e.target.value; resize(); });
+$('autorot').addEventListener('change',e=>{ S.autorot=e.target.checked; last=null; });
+$('resetView').addEventListener('click',()=>{ resetCam(); dirty=true; });
+$('topView').addEventListener('click',()=>{ cam.f=[0,0,-1]; cam.r=[1,0,0]; cam.u=[0,1,0]; dirty=true; });
+if(ALLOW_SAVE){ $('savePng').hidden=false;
+  $('savePng').addEventListener('click',()=>{ draw(); cv.toBlob(b=>{ if(!b) return; const a=document.createElement('a'); a.href=URL.createObjectURL(b);
+    a.download=`orbital_${S.n}_${S.l}_${S.m}${S.real?'_real':''}.png`; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),2000); }); }); }
+
+// drag to orbit (free rotation about any axis), wheel / pinch to zoom
+const ptrs=new Map(); let pinch=null;
+cv.addEventListener('pointerdown',e=>{ cv.setPointerCapture(e.pointerId); ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY}); view.classList.add('drag');
+  if(ptrs.size===2){ const [a,b]=[...ptrs.values()]; pinch={d:Math.hypot(a.x-b.x,a.y-b.y),z:cam.zoom}; } });
+cv.addEventListener('pointermove',e=>{ const p=ptrs.get(e.pointerId); if(!p) return; const dx=e.clientX-p.x, dy=e.clientY-p.y; p.x=e.clientX; p.y=e.clientY;
+  if(ptrs.size===1){ orbit(dx,dy); dirty=true; }
+  else if(ptrs.size===2&&pinch){ const [a,b]=[...ptrs.values()]; cam.zoom=Math.max(0.3,Math.min(8,pinch.z*Math.hypot(a.x-b.x,a.y-b.y)/pinch.d)); dirty=true; } });
+const up=e=>{ ptrs.delete(e.pointerId); if(ptrs.size<2) pinch=null; if(!ptrs.size) view.classList.remove('drag'); };
+cv.addEventListener('pointerup',up); cv.addEventListener('pointercancel',up);
+cv.addEventListener('wheel',e=>{ e.preventDefault(); cam.zoom=Math.max(0.3,Math.min(8,cam.zoom*Math.exp(-e.deltaY*0.0012))); dirty=true; },{passive:false});
+
+// ---------------- loop ----------------
+let last=null; const BASE=4; // atomic time units per second at ×1
+function frame(ts){
+  if(S.playing||S.autorot){ if(last!==null){ const dt=Math.min(0.05,(ts-last)/1000);
+      if(S.playing){ const E=-1/(2*S.n*S.n); S.t+=dt*BASE*S.speed; S.phase=(-E*S.t)%(2*Math.PI); $('tTxt').textContent=S.t.toFixed(1)+' ħ/Eₕ'; dirty=true; }
+      if(S.autorot){ turn([0,0,1],dt*0.4); dirty=true; } }
+    last=ts; }
+  if(needExpo && !ptrs.size) computeExposure();
+  if(dirty){ draw(); dirty=false; }
+  requestAnimationFrame(frame);
+}
+buildPresets(); updateLegend(); applyStyleStart(); changed(); resize(); requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
