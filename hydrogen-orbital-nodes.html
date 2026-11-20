@@ -114,11 +114,11 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:0}
         </div>
         <select id="preset" aria-label="Preset"></select>
         <div class="qn">
-          <label>n<input type="number" id="qN" min="1" max="8" step="1" value="2"></label>
-          <label>l<input type="number" id="qL" min="0" max="7" step="1" value="1"></label>
-          <label>m<input type="number" id="qM" min="-7" max="7" step="1" value="-1"></label>
+          <label>n<input type="number" id="qN" min="1" max="8" step="1" value="1"></label>
+          <label>l<input type="number" id="qL" min="0" max="7" step="1" value="0"></label>
+          <label>m<input type="number" id="qM" min="-7" max="7" step="1" value="0"></label>
         </div>
-        <div class="orbName"><span>orbital</span><span id="orbTxt">2p<sub>y</sub></span></div>
+        <div class="orbName"><span>orbital</span><span id="orbTxt">1s</span></div>
       </div>
 
       <div class="sec">
@@ -187,7 +187,7 @@ input[type=range]{width:100%;accent-color:var(--accent);margin:0}
       <canvas id="gizmo" width="192" height="192" aria-label="Orientation of the x, y and z axes"></canvas>
       <div class="hint tl">hue = arg ψ · brightness ∝ |ψ|</div>
       <div class="hint bl">drag to orbit · scroll to zoom</div>
-      <div class="big"><div class="nm" id="bigName">2p<sub>y</sub></div><div class="e" id="bigE"></div></div>
+      <div class="big"><div class="nm" id="bigName">1s</div><div class="e" id="bigE"></div></div>
       <div class="legend"><div class="wheel" id="wheel"></div>
         <div class="txt"><span><span class="sw" id="swPos"></span>phase 0 · <span class="sw" id="swNeg"></span>phase π</span><span><span class="sw" style="background:var(--node)"></span>node: ψ = 0</span></div></div>
     </main>
@@ -207,7 +207,7 @@ const PRESETS=[['1s',1,0,0,1],['2s',2,0,0,1],['2px',2,1,1,1],['2py',2,1,-1,1],['
   ['4fz³',4,3,0,1],['4fxz²',4,3,1,1],['4fxyz',4,3,-2,1],['4fz(x²−y²)',4,3,2,1],['4fx(x²−3y²) · 3 planar nodes',4,3,3,1],['5g · 4 planar nodes',5,4,4,1],['6h · 5 planar nodes',6,5,5,1],['5s',5,0,0,1],['5dz²',5,2,0,1],
   ['|2,1,+1⟩',2,1,1,0],['|3,2,+1⟩',3,2,1,0],['|3,2,+2⟩',3,2,2,0],['|4,3,+1⟩',4,3,1,0]];
 
-const S={n:2,l:1,m:-1,real:true, br:1.0,op:1,weight:2,sharp:1,cut:0,wheel:0, style:0,gamma:1.6,back:0.3, w:10,autoBox:true,
+const S={n:1,l:0,m:0,real:true, br:1.0,op:1,weight:2,sharp:1,cut:0,wheel:0, style:0,gamma:1.6,back:0.3, w:10,autoBox:true,
   playing:false,t:0,phase:0,speed:1, steps:320,res:0.75, autorot:false,
   nSph:true,nPlane:true,nCone:true,nOp:0.30};
 
